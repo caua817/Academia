@@ -1,0 +1,65 @@
+schema: spec-driven
+
+context: |
+  Project: Sistema de gerenciamento de academia.
+
+  Domain: Gerenciamento de alunos, planos, matrículas, mensalidades,
+  pagamentos e frequência (check-in). Em fases posteriores: modalidades,
+  aulas, reservas, fichas de treino e avaliações físicas.
+  Usuários do sistema: administrador, recepcionista e instrutor.
+
+  Tech stack:
+    Backend: Xano (API, regras de negócio e banco de dados), com código
+    em XanoScript na pasta xano/, sincronizado pelo Xano CLI.
+    Frontend: Reflex (Python), com ambiente venv + pip.
+    Reflex é a tecnologia obrigatória para implementação das interfaces
+    frontend do projeto. Não introduzir outra tecnologia de frontend sem
+    uma mudança explícita da decisão arquitetural.
+
+  Architecture:
+    O backend (Xano) é responsável pelas regras de negócio e pela
+    persistência. O frontend consome a API e não deve ser considerado
+    mecanismo de segurança.
+    Não introduzir outra tecnologia de frontend ou de backend sem uma
+    decisão arquitetural explícita.
+    Não presumir sintaxe XanoScript: consultar e validar com o
+    Xano Developer MCP.
+
+  Security:
+    Autorização sempre aplicada no backend, por perfil.
+    Dados pessoais e de saúde são sensíveis (LGPD) e devem ser acessíveis
+    apenas aos perfis autorizados.
+    Registros financeiros não são apagados fisicamente.
+
+  Development:
+    O projeto será desenvolvido incrementalmente utilizando OpenSpec.
+    Mudanças relevantes devem ser especificadas antes da implementação.
+    O modelo de domínio é global, mas a implementação segue a ordem
+    das changes; não antecipar entidades de fases futuras.
+    Documentos de referência: docs/project-overview.md e
+    docs/domain-model.md.
+
+  Language:
+    Escrever a documentação do projeto e os artefatos OpenSpec
+    em português brasileiro.
+
+rules:
+  proposal:
+    - Descrever claramente o problema, o objetivo e o escopo.
+    - Identificar o que está fora do escopo quando necessário.
+
+  specs:
+    - Escrever requisitos verificáveis.
+    - Utilizar cenários para comportamentos relevantes, incluindo casos de erro e de permissão por perfil.
+
+  tasks:
+    - Dividir a implementação em tarefas pequenas e verificáveis.
+
+operations:
+  apply:
+    guidance:
+      - Executar as verificações relevantes antes de concluir as tarefas.
+
+  archive:
+    guidance:
+      - Confirmar que a implementação corresponde à especificação.
