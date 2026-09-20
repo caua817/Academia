@@ -1,0 +1,15 @@
+# Ambiente virtual Python
+.venv/
+
+# Segredos e credenciais (tokens do Xano etc.)
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Artefatos gerados pelo Reflex
+.web/
+.states/
+assets/external/
+*.db
