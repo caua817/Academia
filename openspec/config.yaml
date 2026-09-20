@@ -50,7 +50,8 @@ rules:
 
   specs:
     - Escrever requisitos verificáveis.
-    - Utilizar cenários para comportamentos relevantes, incluindo casos de erro e de permissão por perfil.
+    - Utilizar cenários para comportamentos relevantes, incluindo casos de erro
+      e de permissão por perfil.
 
   tasks:
     - Dividir a implementação em tarefas pequenas e verificáveis.
@@ -63,3 +64,5 @@ operations:
   archive:
     guidance:
       - Confirmar que a implementação corresponde à especificação.
+githubCopilot:
+  cloudAgent: false
