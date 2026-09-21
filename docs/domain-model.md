@@ -32,6 +32,8 @@ Aluno
 
 Pessoa que acessa o sistema com login (administrador, recepcionista ou instrutor).
 
+**Decisão:** apenas funcionários (administrador, recepcionista e instrutor) possuem login. O aluno é um cadastro, não um usuário do sistema.
+
 **Principais informações:** nome, e-mail, credencial de acesso, perfil, situação (ativo/inativo).
 
 **Relacionamentos:** possui exatamente um perfil. Um instrutor é também um funcionário da academia.
@@ -169,4 +171,3 @@ Registro de medidas e condição física de um aluno em determinada data.
 - Um aluno pode ter mais de uma matrícula ativa (por exemplo, planos de modalidades diferentes)?
 - Existem dependentes ou planos familiares?
 - Como tratar trancamento e cancelamento (impacto em mensalidades futuras)?
-- O aluno terá login próprio?
