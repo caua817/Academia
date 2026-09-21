@@ -30,7 +30,7 @@ Academias pequenas e médias costumam controlar alunos, pagamentos e acessos em 
 | Administrador / Gerente | Configura planos e modalidades, gerencia funcionários, acompanha indicadores financeiros. |
 | Recepcionista | Cadastra alunos, realiza matrículas, registra pagamentos e check-ins. |
 | Instrutor | Consulta alunos, acompanha frequência; nas fases futuras, gerencia treinos e avaliações. |
-| Aluno | Consulta seus dados, plano, pagamentos e frequência `[VALIDAR: haverá acesso do aluno na fase inicial?]`. |
+| Aluno | Não acessa o sistema nesta versão. É um cadastro gerenciado pelos funcionários. O acesso do aluno pode ser reavaliado em uma fase futura. |
 
 ## 5. Escopo
 
