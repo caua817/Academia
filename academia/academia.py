@@ -1,36 +1,72 @@
-"""Welcome to Reflex! This file outlines the steps to create a basic app."""
-
 import reflex as rx
+from academia.state import ConnectionState
 
-from rxconfig import config
-
-
-class State(rx.State):
-    """The app state."""
-
-
-def index() -> rx.Component:
-    # Welcome Page (Index)
-    return rx.container(
-        rx.color_mode.button(position="top-right"),
+def connection_card() -> rx.Component:
+    return rx.card(
         rx.vstack(
-            rx.heading("Welcome to Reflex!", size="9"),
-            rx.text(
-                "Get started by editing ",
-                rx.code(f"{config.app_name}/{config.app_name}.py"),
-                size="5",
+            rx.heading("Diagnóstico de Conexão: Reflex ↔ Xano", size="5"),
+            rx.divider(),
+            
+            rx.hstack(
+                rx.text("URL Base do Xano: ", weight="bold"),
+                rx.code(
+                    rx.cond(
+                        ConnectionState.api_url != "",
+                        ConnectionState.api_url,
+                        "Não configurada"
+                    )
+                ),
+                align="center",
             ),
-            rx.link(
-                rx.button("Check out our docs!"),
-                href="https://reflex.dev/docs/getting-started/introduction/",
-                is_external=True,
+            
+            rx.hstack(
+                rx.text("Status da Conexão: ", weight="bold"),
+                rx.cond(
+                    ConnectionState.is_checking,
+                    rx.badge("Verificando...", color_scheme="yellow"),
+                    rx.cond(
+                        ConnectionState.is_connected,
+                        rx.badge("Conectado", color_scheme="green"),
+                        rx.badge("Desconectado / Erro", color_scheme="red"),
+                    ),
+                ),
+                align="center",
             ),
-            spacing="5",
-            justify="center",
-            min_height="85vh",
+            
+            rx.callout(
+                ConnectionState.status_message,
+                icon="info",
+                color_scheme=rx.cond(ConnectionState.is_connected, "green", "red"),
+                role="status",
+                width="100%",
+            ),
+
+            rx.button(
+                "Testar Conexão Novamente",
+                on_click=ConnectionState.verify_connection,
+                loading=ConnectionState.is_checking,
+                color_scheme="blue",
+            ),
+            spacing="4",
+            width="100%",
         ),
+        width="100%",
+        max_width="600px",
     )
 
+def index() -> rx.Component:
+    return rx.container(
+        rx.vstack(
+            rx.heading("Sistema de Gestão de Academia", size="8"),
+            rx.text("Fundação técnica - Verificação de integração com o backend", color_scheme="gray"),
+            connection_card(),
+            spacing="6",
+            align="center",
+            justify="center",
+            min_height="80vh",
+        ),
+        on_mount=ConnectionState.verify_connection,
+    )
 
 app = rx.App()
-app.add_page(index)
+app.add_page(index, title="Academia - Conexão Xano")
