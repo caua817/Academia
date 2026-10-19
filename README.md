@@ -10,7 +10,7 @@ O sistema foi desenhado exclusivamente para a equipe interna da academia (**Admi
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+##  Tecnologias Utilizadas
 
 - **Frontend:** [Reflex](https://reflex.dev/) (Framework web reativo construído integralmente em Python)
 - **Backend & Database:** [Xano](https://www.xano.com/) (No-code Backend-as-a-Service com banco de dados PostgreSQL relacional)
