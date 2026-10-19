@@ -1,10 +1,10 @@
-# 🏋️‍♂️ Sistema de Gestão de Academia
+#  Sistema de Gestão de Academia
 
 Sistema web de alta performance para gestão operacional interna de academias, focado no controlo de matrículas, gestão de alunos, planos financeiro-operacionais e fichas de treino.
 
 ---
 
-## 🎯 Objetivo do Projeto
+##  Objetivo do Projeto
 
 O sistema foi desenhado exclusivamente para a equipe interna da academia (**Administradores, Recepcionistas e Instrutores**). Ele centraliza as rotinas administrativas e operacionais num único painel, garantindo segurança nos acessos e agilidade no atendimento.
 
@@ -19,7 +19,7 @@ O sistema foi desenhado exclusivamente para a equipe interna da academia (**Admi
 
 ---
 
-## 👥 Perfis de Acesso (*RBAC*)
+##  Perfis de Acesso (*RBAC*)
 
 - **Administrador:** Acesso total ao sistema, gestão de utilizadores/funcionários, relatórios e configurações gerais.
 - **Recepcionista:** Gestão de cadastros de alunos, matrículas, verificação de pagamentos e atendimento.
@@ -27,7 +27,7 @@ O sistema foi desenhado exclusivamente para a equipe interna da academia (**Admi
 
 ---
 
-## 📂 Estrutura da Solução
+##  Estrutura da Solução
 
 ```text
 academia/
