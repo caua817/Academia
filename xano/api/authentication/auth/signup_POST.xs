@@ -9,6 +9,31 @@ query "auth/signup" verb=POST {
   }
 
   stack {
+    precondition ($input.password != null) {
+      error_type = "inputerror"
+      error = "A senha é obrigatória."
+    }
+
+    precondition (($input.password|strlen) >= 8) {
+      error_type = "inputerror"
+      error = "A senha deve conter pelo menos 8 caracteres."
+    }
+
+    precondition ("/[A-Z]/"|regex_matches:$input.password) {
+      error_type = "inputerror"
+      error = "A senha deve conter uma letra maiúscula."
+    }
+
+    precondition ("/[a-z]/"|regex_matches:$input.password) {
+      error_type = "inputerror"
+      error = "A senha deve conter uma letra minúscula."
+    }
+
+    precondition ("/[0-9]/"|regex_matches:$input.password) {
+      error_type = "inputerror"
+      error = "A senha deve conter um número."
+    }
+
     // Check if a user record with that email exists
     db.get user {
       field_name = "email"
