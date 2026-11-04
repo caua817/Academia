@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import httpx
 
-from academia.alunos import filter_alunos, validate_nome
+from academia.alunos import AlunosState, filter_alunos, validate_nome
 from academia.services.xano_client import XanoAPIError, XanoClient
 
 _HTTPX_CLIENT = httpx.Client
@@ -64,8 +64,15 @@ class XanoClientTests(unittest.TestCase):
         self.assertEqual(result, aluno)
         self.assertEqual(requests[0].url.path, "/api:sGd5fzIy/alunos/detalhes/12")
 
-    def test_create_uses_post_and_sends_the_new_fields(self):
-        payload = {"nome": "Ana Lima", "cpf": None}
+    def test_create_sends_empty_optional_fields_as_null(self):
+        payload = {
+            "nome": "Aluno Sintético",
+            "cpf": None,
+            "data_nascimento": None,
+            "contato": None,
+            "email": None,
+            "endereco": None,
+        }
         result, requests = self.invoke(
             lambda: XanoClient.create_aluno("session-token", payload),
             lambda request: httpx.Response(200, json={"id": 12}, request=request),
@@ -160,6 +167,91 @@ class StudentManagementHelperTests(unittest.TestCase):
     def test_name_is_required_after_trimming(self):
         self.assertEqual(validate_nome("   "), "O nome do aluno é obrigatório.")
         self.assertIsNone(validate_nome(" Ana Lima "))
+
+
+class StudentStateHarness:
+    def __init__(self):
+        self.auth_token = "session-token"
+        self.alunos = []
+        self.is_saving = False
+        self.is_editing = False
+        self.aluno_id = 0
+        self.is_form_open = True
+        self.form_nome = "Aluno Sintético"
+        self.form_cpf = ""
+        self.form_data_nascimento = ""
+        self.form_contato = ""
+        self.form_email = ""
+        self.form_endereco = ""
+        self.form_error = ""
+        self.success_message = ""
+
+    async def _auth_token(self):
+        return self.auth_token
+
+    async def _clear_login(self):
+        return None
+
+    async def _reload_alunos(self, token, action):
+        return False
+
+    def _api_error_message(self, error, action):
+        return AlunosState._api_error_message(self, error, action)
+
+    def _reset_form(self):
+        AlunosState._reset_form(self)
+
+
+class StudentManagementStateTests(unittest.IsolatedAsyncioTestCase):
+    async def run_save(self, state):
+        event = AlunosState.__dict__["save_aluno"].fn
+        return [result async for result in event(state)]
+
+    async def test_save_sends_empty_optional_fields_as_null(self):
+        state = StudentStateHarness()
+        with patch(
+            "academia.alunos.XanoClient.create_aluno",
+            return_value={"id": 9},
+        ) as create_aluno:
+            await self.run_save(state)
+
+        create_aluno.assert_called_once_with(
+            "session-token",
+            {
+                "nome": "Aluno Sintético",
+                "cpf": None,
+                "data_nascimento": None,
+                "contato": None,
+                "email": None,
+                "endereco": None,
+            },
+        )
+        self.assertEqual(state.success_message, "Aluno cadastrado com sucesso.")
+
+    async def test_blank_name_is_rejected_without_success_or_request(self):
+        state = StudentStateHarness()
+        state.form_nome = "  "
+        state.success_message = "Aluno cadastrado com sucesso."
+        with patch("academia.alunos.XanoClient.create_aluno") as create_aluno:
+            await self.run_save(state)
+
+        create_aluno.assert_not_called()
+        self.assertEqual(state.form_error, "O nome do aluno é obrigatório.")
+        self.assertEqual(state.success_message, "")
+
+    async def test_http_failure_does_not_leave_success_message(self):
+        state = StudentStateHarness()
+        state.success_message = "Aluno cadastrado com sucesso."
+        with patch(
+            "academia.alunos.XanoClient.create_aluno",
+            side_effect=XanoAPIError("falha sintética", 500),
+        ):
+            await self.run_save(state)
+
+        self.assertIn("HTTP 500", state.form_error)
+        self.assertEqual(state.success_message, "")
+        self.assertTrue(state.is_form_open)
+        self.assertFalse(state.is_saving)
 
 
 if __name__ == "__main__":

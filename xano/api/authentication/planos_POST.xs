@@ -1,7 +1,7 @@
-query "planos" verb=POST {
+// Cadastra um plano ativo para administradores.
+query planos verb=POST {
   api_group = "Authentication"
   auth = "user"
-  description = "Cadastra um plano ativo para administradores."
 
   input {
     text nome filters=trim
@@ -12,45 +12,43 @@ query "planos" verb=POST {
 
   stack {
     function.run "Quick Start/enforce_role" {
-      input = {
-        user_id: $auth.id
-        required_role: "admin"
-      }
+      input = {user_id: $auth.id, required_role: "admin"}
     } as $role_check
-
+  
     precondition (($input.nome|strlen) > 0) {
       error_type = "inputerror"
       error = "O nome do plano é obrigatório."
     }
-
+  
     precondition ($input.duracao_meses > 0) {
       error_type = "inputerror"
       error = "A duração do plano deve ser maior que zero."
     }
-
+  
     precondition ($input.valor > 0) {
       error_type = "inputerror"
       error = "O valor do plano deve ser maior que zero."
     }
-
-    db.add "plano" {
+  
+    db.add plano {
       data = {
-        nome: $input.nome
-        descricao: $input.descricao
+        nome         : $input.nome
+        descricao    : $input.descricao
         duracao_meses: $input.duracao_meses
-        valor: $input.valor
-        situacao: "Ativo"
+        valor        : $input.valor
+        situacao     : "Ativo"
       }
     } as $plano
   }
 
   response = {
-    id: $plano.id
-    nome: $plano.nome
-    descricao: $plano.descricao
+    id           : $plano.id
+    nome         : $plano.nome
+    descricao    : $plano.descricao
     duracao_meses: $plano.duracao_meses
-    valor: $plano.valor
-    situacao: $plano.situacao
+    valor        : $plano.valor
+    situacao     : $plano.situacao
   }
+
   guid = "kmhzXiymOYJRZxJ7EZG2ymwLEr4"
 }

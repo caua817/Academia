@@ -222,6 +222,7 @@ class AlunosState(rx.State):
 
     @rx.event
     async def save_aluno(self):
+        self.success_message = ""
         nome = self.form_nome.strip()
         validation_error = validate_nome(nome)
         if validation_error:

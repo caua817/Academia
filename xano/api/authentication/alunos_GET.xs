@@ -1,24 +1,21 @@
-query "alunos" verb=GET {
+// Lista os alunos para usuários administradores.
+query alunos verb=GET {
   api_group = "Authentication"
   auth = "user"
-  description = "Lista os alunos para usuários administradores."
 
   input {
   }
 
   stack {
     function.run "Quick Start/enforce_role" {
-      input = {
-        user_id: $auth.id
-        required_role: "admin"
-      }
+      input = {user_id: $auth.id, required_role: "admin"}
     } as $role_check
-
-    db.query "aluno" {
+  
+    db.query aluno {
       sort = {created_at: "desc"}
       return = {type: "list"}
     } as $alunos
-
+  
     var $alunos_visiveis {
       value = $alunos|map:{id:$$.id,nome:$$.nome,contato:$$.contato,email:$$.email,situacao:$$.situacao}
     }

@@ -1,4 +1,4 @@
-table "plano" {
+table plano {
   auth = false
 
   schema {
@@ -8,7 +8,7 @@ table "plano" {
     text? descricao filters=trim
     int duracao_meses
     decimal valor
-    enum situacao?="Ativo" {
+    enum situacao?=Ativo {
       values = ["Ativo", "Descontinuado"]
     }
   }
@@ -19,5 +19,6 @@ table "plano" {
     {type: "btree", field: [{name: "nome", op: "asc"}]}
     {type: "btree", field: [{name: "situacao", op: "asc"}]}
   ]
+
   guid = "sHFmtC7Pbhw2aVQ9P4yDX-zR7_M"
 }

@@ -20,6 +20,51 @@ class XanoAPIError(Exception):
 
 class XanoClient:
     @staticmethod
+    def _contains_employee_credential(data: object) -> bool:
+        if isinstance(data, dict):
+            for key, value in data.items():
+                normalized_key = "".join(
+                    character
+                    for character in str(key).casefold()
+                    if character.isalnum()
+                )
+                if (
+                    "password" in normalized_key
+                    or "senha" in normalized_key
+                    or "token" in normalized_key
+                    or "credential" in normalized_key
+                ):
+                    return True
+                if XanoClient._contains_employee_credential(value):
+                    return True
+        elif isinstance(data, list):
+            return any(
+                XanoClient._contains_employee_credential(item)
+                for item in data
+            )
+        return False
+
+    @staticmethod
+    def _validate_employee_payload(payload: JsonPayload) -> None:
+        allowed_fields = {"name", "email", "role"}
+        if (
+            set(payload) != allowed_fields
+            or XanoClient._contains_employee_credential(payload)
+        ):
+            raise XanoAPIError(
+                "A solicitação de funcionário contém campos inválidos."
+            )
+
+    @staticmethod
+    def _expect_employee_object(data: object) -> dict:
+        employee = XanoClient._expect_object(data)
+        if XanoClient._contains_employee_credential(employee):
+            raise XanoAPIError(
+                "A API retornou campos de credencial inesperados."
+            )
+        return employee
+
+    @staticmethod
     def _request(
         method: str,
         path: str,
@@ -89,6 +134,74 @@ class XanoClient:
         """Busca os alunos e sinaliza explicitamente falhas da API."""
         data = XanoClient._request("GET", "/alunos", token)
         return XanoClient._expect_list(data, "alunos")
+
+    @staticmethod
+    def get_current_user(token: str) -> dict:
+        data = XanoClient._request("GET", "/auth/me", token)
+        return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def get_funcionarios(token: str) -> list[dict]:
+        data = XanoClient._request("GET", "/funcionarios", token)
+        employees = XanoClient._expect_list(data, "funcionários")
+        if XanoClient._contains_employee_credential(employees):
+            raise XanoAPIError(
+                "A API retornou campos de credencial inesperados."
+            )
+        return employees
+
+    @staticmethod
+    def get_funcionario(token: str, funcionario_id: int) -> dict:
+        data = XanoClient._request(
+            "GET",
+            f"/funcionarios/detalhes/{funcionario_id}",
+            token,
+        )
+        return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def invite_funcionario(token: str, payload: JsonPayload) -> dict:
+        XanoClient._validate_employee_payload(payload)
+        data = XanoClient._request(
+            "POST",
+            "/funcionarios/convites",
+            token,
+            payload,
+        )
+        return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def update_funcionario(
+        token: str,
+        funcionario_id: int,
+        payload: JsonPayload,
+    ) -> dict:
+        XanoClient._validate_employee_payload(payload)
+        data = XanoClient._request(
+            "PUT",
+            f"/funcionarios/atualizar/{funcionario_id}",
+            token,
+            payload,
+        )
+        return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def deactivate_funcionario(token: str, funcionario_id: int) -> dict:
+        data = XanoClient._request(
+            "PATCH",
+            f"/funcionarios/desativar/{funcionario_id}",
+            token,
+        )
+        return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def activate_funcionario(token: str, funcionario_id: int) -> dict:
+        data = XanoClient._request(
+            "PATCH",
+            f"/funcionarios/ativar/{funcionario_id}",
+            token,
+        )
+        return XanoClient._expect_employee_object(data)
 
     @staticmethod
     def get_aluno(token: str, aluno_id: int) -> dict:
