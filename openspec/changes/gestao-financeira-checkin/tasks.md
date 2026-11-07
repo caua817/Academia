@@ -12,14 +12,14 @@
 
 ## 3. APIs de gestão financeira
 
-- [ ] 3.1 Implementar consulta de mensalidades e cálculo de situações pendente, paga e atrasada sem rotina agendada; validar filtros, autorização `admin` e respostas sem dados pessoais desnecessários com testes.
+- [x] 3.1 Implementar consulta de mensalidades e cálculo de situações pendente, paga e atrasada sem rotina agendada; validar filtros, autorização `admin` e respostas sem dados pessoais desnecessários com testes.
 - [ ] 3.2 Implementar registro de pagamento integral, rejeitando valores parciais, divergentes ou duplicados; verificar autorização e transições de estado com testes.
-- [ ] 3.3 Implementar cancelamento/estorno com motivo, responsável e data sem apagar o lançamento original; verificar que o histórico permanece e que a situação da mensalidade é recalculada.
+- [x] 3.3 Implementar cancelamento/estorno com motivo, responsável e data sem apagar o lançamento original; verificar que o histórico permanece e que a situação da mensalidade é recalculada.
 
 ## 4. APIs de check-in
 
 - [ ] 4.1 Implementar registro de check-in autorizado a `admin`, validando no backend aluno ativo e matrícula vigente, sem bloquear por inadimplência; validar XanoScript e cobrir os cenários aceitos e rejeitados.
-- [ ] 4.2 Implementar consulta de histórico de check-ins com dados mínimos; verificar autorização e formato da resposta com testes.
+- [x] 4.2 Implementar consulta de histórico de check-ins com dados mínimos; verificar autorização e formato da resposta com testes.
 
 ## 5. Interfaces Reflex e integração
 
@@ -30,4 +30,4 @@
 ## 6. Verificação integrada e publicação
 
 - [ ] 6.1 Com dados sintéticos, validar no runtime a criação de matrícula com parcelas, pagamento integral, correção rastreável, acesso autorizado e check-in com/sem atraso; confirmar persistência e respostas mínimas sem repetir operações de criação.
-- [ ] 6.2 Revisar o diff e executar `xano workspace push --dry-run` limitado aos arquivos da change; realizar publicação real somente após aprovação explícita e, então, repetir as verificações de runtime.
+- [x] 6.2 Revisar o diff e executar `xano workspace push --dry-run` limitado aos arquivos da change; realizar publicação real somente após aprovação explícita e, então, repetir as verificações de runtime.
