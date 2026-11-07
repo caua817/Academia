@@ -7,7 +7,7 @@
 
 ## 2. Geração de mensalidades na matrícula
 
-- [ ] 2.1 Alterar a criação da matrícula para gerar na mesma transação uma parcela integral por mês contratado, com valor congelado, vencimentos no dia 10 e sem cobranças retroativas; validar XanoScript e cobrir calendário, atomicidade e prevenção de duplicatas com testes.
+- [x] 2.1 Alterar a criação da matrícula para gerar na mesma transação uma parcela integral por mês contratado, com valor congelado, vencimentos no dia 10 e sem cobranças retroativas; validar XanoScript e cobrir calendário, atomicidade e prevenção de duplicatas com testes.
 - [ ] 2.2 Preservar matrículas anteriores sem parcelas automáticas; verificar com teste que a implantação não cria cobranças retroativas.
 
 ## 3. APIs de gestão financeira
