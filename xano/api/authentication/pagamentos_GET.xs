@@ -56,4 +56,5 @@ query pagamentos verb=GET {
   }
 
   response = $pagamentos_visiveis
+  guid = "wIz32wpOGfhZWYc3qZHcVF5Nzzc"
 }

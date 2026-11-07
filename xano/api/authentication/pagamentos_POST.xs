@@ -75,4 +75,5 @@ query pagamentos verb=POST {
     registrado_por  : $pagamento.registrado_por
     situacao        : $pagamento.situacao
   }
+  guid = "70mRAmiHAs_dygW1t59iPDjU2S4"
 }

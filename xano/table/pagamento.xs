@@ -35,4 +35,5 @@ table pagamento {
     {type: "btree", field: [{name: "registrado_por"}]}
     {type: "btree", field: [{name: "situacao"}]}
   ]
+  guid = "EVadIVgNRkx2msa9Sw9YRXJe1AE"
 }

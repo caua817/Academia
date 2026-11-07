@@ -60,4 +60,5 @@ query checkins verb=POST {
     data_hora      : $checkin.data_hora
     registrado_por : $checkin.registrado_por
   }
+  guid = "cU4TgvHI8o2J8A0SwwXtousecD0"
 }

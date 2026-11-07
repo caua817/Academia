@@ -75,4 +75,5 @@ query "pagamentos/corrigir/{pagamento_id}" verb=PATCH {
     corrigido_em    : $pagamento.corrigido_em
     corrigido_por   : $pagamento.corrigido_por
   }
+  guid = "P7J40XsdjrfdOl-r8GuuOIfhC94"
 }

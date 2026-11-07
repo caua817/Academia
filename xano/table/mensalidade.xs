@@ -21,4 +21,5 @@ table mensalidade {
     }
     {type: "btree", field: [{name: "data_vencimento", op: "asc"}]}
   ]
+  guid = "zCGX41CDf6iat4v_0pocdGd6xFo"
 }

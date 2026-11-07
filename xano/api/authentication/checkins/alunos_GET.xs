@@ -25,4 +25,5 @@ query "checkins/alunos" verb=GET {
   }
 
   response = $alunos_visiveis
+  guid = "vataNU_JlwkHw3mgfTu0F8rt248"
 }

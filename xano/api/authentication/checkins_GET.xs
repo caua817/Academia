@@ -46,4 +46,5 @@ query checkins verb=GET {
   }
 
   response = $checkins_visiveis
+  guid = "b-p6EsZNVehcMObQ8Q3IdCxwB8E"
 }

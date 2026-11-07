@@ -21,4 +21,5 @@ table checkin {
     {type: "btree", field: [{name: "matricula_id"}]}
     {type: "btree", field: [{name: "registrado_por"}]}
   ]
+  guid = "oYEfUwdyCCz2dbLNS0AO19dPkMw"
 }
