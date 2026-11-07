@@ -19,13 +19,13 @@ query checkins verb=GET {
         }
         usuario: {
           table: "user"
-          where: $db.checkin.registrado_por == $db.user.id
+          where: $db.checkin.registrado_por == $db.usuario.id
         }
       }
 
       eval = {
         aluno_nome: $db.aluno.nome
-        usuario_nome: $db.user.name
+        usuario_nome: $db.usuario.name
       }
       sort = {data_hora: "desc"}
       return = {type: "list"}
