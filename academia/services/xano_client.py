@@ -130,6 +130,46 @@ class XanoClient:
         return data
 
     @staticmethod
+    def _expect_records(
+        data: object,
+        resource_name: str,
+        required_fields: tuple[str, ...],
+    ) -> list[dict]:
+        records = XanoClient._expect_list(data, resource_name)
+        if any(
+            any(field not in record for field in required_fields)
+            for record in records
+        ):
+            raise XanoAPIError(
+                f"A API retornou registros de {resource_name} incompletos."
+            )
+        return records
+
+    @staticmethod
+    def _expect_record(
+        data: object,
+        resource_name: str,
+        required_fields: tuple[str, ...],
+    ) -> dict:
+        record = XanoClient._expect_object(data)
+        if any(field not in record for field in required_fields):
+            raise XanoAPIError(
+                f"A API retornou um registro de {resource_name} incompleto."
+            )
+        return record
+
+    @staticmethod
+    def _validate_payload_fields(
+        payload: JsonPayload,
+        expected_fields: set[str],
+        resource_name: str,
+    ) -> None:
+        if set(payload) != expected_fields:
+            raise XanoAPIError(
+                f"A solicitação de {resource_name} contém campos inválidos."
+            )
+
+    @staticmethod
     def get_alunos(token: str) -> list[dict]:
         """Busca os alunos e sinaliza explicitamente falhas da API."""
         data = XanoClient._request("GET", "/alunos", token)
@@ -309,3 +349,138 @@ class XanoClient:
     def create_matricula(token: str, payload: JsonPayload) -> dict:
         data = XanoClient._request("POST", "/matriculas", token, payload)
         return XanoClient._expect_object(data)
+
+    @staticmethod
+    def get_mensalidades(token: str) -> list[dict]:
+        data = XanoClient._request("GET", "/mensalidades", token)
+        return XanoClient._expect_records(
+            data,
+            "mensalidades",
+            (
+                "id",
+                "matricula_id",
+                "aluno_nome",
+                "competencia",
+                "data_vencimento",
+                "valor",
+                "situacao",
+            ),
+        )
+
+    @staticmethod
+    def get_pagamentos(token: str) -> list[dict]:
+        data = XanoClient._request("GET", "/pagamentos", token)
+        return XanoClient._expect_records(
+            data,
+            "pagamentos",
+            (
+                "id",
+                "mensalidade_id",
+                "aluno_nome",
+                "competencia",
+                "valor",
+                "forma_pagamento",
+                "data_pagamento",
+                "registrado_por",
+                "situacao",
+            ),
+        )
+
+    @staticmethod
+    def create_pagamento(token: str, payload: JsonPayload) -> dict:
+        XanoClient._validate_payload_fields(
+            payload,
+            {"mensalidade_id", "valor", "forma_pagamento"},
+            "pagamento",
+        )
+        data = XanoClient._request("POST", "/pagamentos", token, payload)
+        return XanoClient._expect_record(
+            data,
+            "pagamentos",
+            (
+                "id",
+                "mensalidade_id",
+                "valor",
+                "forma_pagamento",
+                "data_pagamento",
+                "registrado_por",
+                "situacao",
+            ),
+        )
+
+    @staticmethod
+    def correct_pagamento(
+        token: str,
+        pagamento_id: int,
+        payload: JsonPayload,
+    ) -> dict:
+        XanoClient._validate_payload_fields(
+            payload,
+            {"tipo_correcao", "motivo"},
+            "correção de pagamento",
+        )
+        data = XanoClient._request(
+            "PATCH",
+            f"/pagamentos/corrigir/{pagamento_id}",
+            token,
+            payload,
+        )
+        return XanoClient._expect_record(
+            data,
+            "pagamentos",
+            (
+                "id",
+                "mensalidade_id",
+                "situacao",
+                "tipo_correcao",
+                "motivo_correcao",
+                "corrigido_em",
+                "corrigido_por",
+            ),
+        )
+
+    @staticmethod
+    def get_checkin_alunos(token: str) -> list[dict]:
+        data = XanoClient._request("GET", "/checkins/alunos", token)
+        return XanoClient._expect_records(
+            data,
+            "alunos disponíveis para check-in",
+            ("id", "nome"),
+        )
+
+    @staticmethod
+    def get_checkins(token: str) -> list[dict]:
+        data = XanoClient._request("GET", "/checkins", token)
+        return XanoClient._expect_records(
+            data,
+            "check-ins",
+            (
+                "id",
+                "aluno_id",
+                "aluno_nome",
+                "matricula_id",
+                "data_hora",
+                "registrado_por",
+                "usuario_nome",
+            ),
+        )
+
+    @staticmethod
+    def create_checkin(token: str, payload: JsonPayload) -> dict:
+        XanoClient._validate_payload_fields(
+            payload,
+            {"aluno_id"},
+            "check-in",
+        )
+        data = XanoClient._request("POST", "/checkins", token, payload)
+        return XanoClient._expect_record(
+            data,
+            "check-ins",
+            (
+                "id",
+                "aluno_id",
+                "matricula_id",
+                "data_hora",
+                "registrado_por",
+            ),
+        )

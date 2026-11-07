@@ -1,6 +1,12 @@
 import reflex as rx
 
 from academia.alunos import AlunosState, student_management_content
+from academia.financeiro import (
+    CheckinsState,
+    FinanceiroState,
+    checkins_page,
+    financeiro_page,
+)
 from academia.funcionarios import FuncionariosState, funcionarios_page
 from academia.login import LoginState, login_page
 from academia.matriculas import MatriculasState, matriculas_page
@@ -184,6 +190,18 @@ def sidebar(active_page: str) -> rx.Component:
                 "clipboard-list",
                 "/matriculas",
                 active_page == "matriculas",
+            ),
+            nav_link(
+                "Financeiro",
+                "wallet",
+                "/financeiro",
+                active_page == "financeiro",
+            ),
+            nav_link(
+                "Check-ins",
+                "scan-line",
+                "/checkins",
+                active_page == "checkins",
             ),
             nav_link(
                 "Funcionários",
@@ -463,6 +481,8 @@ def app_shell(
         "alunos": AlunosState.load_alunos,
         "planos": PlanosState.load_planos,
         "matriculas": MatriculasState.load_matriculas,
+        "financeiro": FinanceiroState.load_financeiro,
+        "checkins": CheckinsState.load_checkins,
         "funcionarios": FuncionariosState.load_funcionarios,
     }[active_page]
     is_loading = {
@@ -470,6 +490,8 @@ def app_shell(
         "alunos": AlunosState.is_loading,
         "planos": PlanosState.is_loading,
         "matriculas": MatriculasState.is_loading,
+        "financeiro": FinanceiroState.is_loading,
+        "checkins": CheckinsState.is_loading,
         "funcionarios": FuncionariosState.is_loading,
     }[active_page]
     return rx.flex(
@@ -525,5 +547,7 @@ app.add_page(dashboard_page, route="/")
 app.add_page(alunos_page, route="/alunos")
 app.add_page(planos_page, route="/planos")
 app.add_page(matriculas_page, route="/matriculas")
+app.add_page(financeiro_page, route="/financeiro")
+app.add_page(checkins_page, route="/checkins")
 app.add_page(funcionarios_page, route="/funcionarios")
 app.add_page(login_page, route="/login")

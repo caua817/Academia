@@ -18,6 +18,10 @@ O sistema SHALL permitir que usuários autenticados com perfil `admin` registrem
 - **WHEN** um usuário `admin` registra o check-in de um aluno ativo com matrícula vigente e mensalidade atrasada
 - **THEN** o sistema permite o check-in sem alterar a situação financeira
 
+#### Scenario: Check-ins repetidos no mesmo dia
+- **WHEN** um usuário `admin` registra mais de um check-in para o mesmo aluno no mesmo dia
+- **THEN** o sistema persiste cada ocorrência sem deduplicação automática
+
 #### Scenario: Aluno inativo ou sem matrícula vigente
 - **WHEN** um usuário `admin` tenta registrar o check-in de um aluno inativo ou sem matrícula vigente
 - **THEN** o sistema rejeita a operação sem criar um registro de presença

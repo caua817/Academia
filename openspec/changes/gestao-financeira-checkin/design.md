@@ -35,13 +35,13 @@ Alternativa descartada: manter um estado de atraso que precisa ser alterado por 
 
 ### Registrar correções como eventos rastreáveis
 
-Manter o pagamento original e seus metadados; uma correção registra motivo, responsável, data e estado de cancelamento/estorno. A API calcula a situação financeira com base nos lançamentos válidos, não em exclusão ou sobrescrita silenciosa.
+Manter o pagamento original e seus metadados; uma correção contábil registra motivo, responsável, data e estado de cancelamento/estorno, sem iniciar reembolso externo. A API calcula a situação financeira com base nos lançamentos válidos, não em exclusão ou sobrescrita silenciosa. O meio de pagamento aceito é PIX ou cartão.
 
 Alternativa descartada: editar ou apagar o pagamento original, pois isso elimina o histórico necessário para auditoria.
 
 ### Validar check-in no backend no momento do registro
 
-O endpoint de check-in confirma no Xano que o aluno está ativo e que existe matrícula válida na data/hora do registro. A situação financeira não participa dessa validação. O usuário responsável e o instante devem ser obtidos/validados no backend, não confiados ao cliente.
+O endpoint de check-in confirma no Xano que o aluno está ativo e que existe matrícula válida na data/hora do registro. A situação financeira não participa dessa validação. O usuário responsável e o instante devem ser obtidos/validados no backend, não confiados ao cliente. Vários registros no mesmo dia são ocorrências distintas e não serão deduplicados.
 
 Alternativa descartada: aplicar a regra somente na interface Reflex, pois ela não é uma fronteira de segurança e pode operar com estado desatualizado.
 

@@ -91,6 +91,19 @@ query matriculas verb=POST {
           value = $start_timestamp
             |transform_timestamp:"first day of this month":"America/Sao_Paulo"
         }
+
+        var $first_due_month {
+          value = $start_month
+        }
+
+        conditional {
+          if ($start_day > 10) {
+            var.update $first_due_month {
+              value = $start_month
+                |transform_timestamp:"1 month":"America/Sao_Paulo"
+            }
+          }
+        }
       
         var $month_shift {
           value = $plano.duracao_meses|to_text|concat:" months"
@@ -154,6 +167,47 @@ query matriculas verb=POST {
             valor_contratado        : $plano.valor
           }
         } as $matricula
+
+        var $month_offsets {
+          value = []|range:0:($plano.duracao_meses - 1)
+        }
+
+        foreach ($month_offsets) {
+          each as $month_offset {
+            var $month_shift {
+              value = $month_offset|to_text|concat:" months"
+            }
+
+            var $due_month {
+              value = $first_due_month
+                |transform_timestamp:$month_shift:"America/Sao_Paulo"
+            }
+
+            var $due_date_timestamp {
+              value = $due_month
+                |transform_timestamp:"9 days":"America/Sao_Paulo"
+            }
+
+            var $competencia {
+              value = $due_month
+                |format_timestamp:"Y-m-01":"America/Sao_Paulo"
+            }
+
+            var $data_vencimento {
+              value = $due_date_timestamp
+                |format_timestamp:"Y-m-d":"America/Sao_Paulo"
+            }
+
+            db.add mensalidade {
+              data = {
+                matricula_id   : $matricula.id
+                competencia    : $competencia
+                data_vencimento: $data_vencimento
+                valor          : $matricula.valor_contratado
+              }
+            } as $mensalidade
+          }
+        }
       }
     }
   }
@@ -166,6 +220,7 @@ query matriculas verb=POST {
     data_termino            : $matricula.data_termino
     duracao_contratada_meses: $matricula.duracao_contratada_meses
     valor_contratado        : $matricula.valor_contratado
+    mensalidades_geradas    : $matricula.duracao_contratada_meses
   }
 
   guid = "VnYLn7eszHGKF6bXEbL_sPXj6S0"

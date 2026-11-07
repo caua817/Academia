@@ -24,7 +24,7 @@ O sistema SHALL permitir que usuários autenticados com perfil `admin` consultem
 
 ### Requirement: Administradores podem registrar o pagamento integral de uma mensalidade
 
-O sistema SHALL permitir que usuários `admin` registrem o pagamento integral de uma mensalidade pendente ou atrasada, mantendo valor, data, forma de pagamento e usuário responsável pelo registro.
+O sistema SHALL permitir que usuários `admin` registrem o pagamento integral de uma mensalidade pendente ou atrasada, mantendo valor, data, forma de pagamento (`PIX` ou `Cartão`) e usuário responsável pelo registro.
 
 #### Scenario: Pagamento integral registrado
 - **WHEN** um usuário `admin` registra o valor integral de uma mensalidade pendente ou atrasada
@@ -38,13 +38,17 @@ O sistema SHALL permitir que usuários `admin` registrem o pagamento integral de
 - **WHEN** um usuário `admin` tenta registrar outro pagamento para uma mensalidade já paga
 - **THEN** o sistema rejeita a operação sem criar um segundo pagamento ativo
 
+#### Scenario: Forma de pagamento não aceita
+- **WHEN** um usuário `admin` tenta registrar pagamento com forma diferente de `PIX` ou `Cartão`
+- **THEN** o sistema rejeita a operação sem alterar a mensalidade
+
 #### Scenario: Usuário sem perfil administrativo registra pagamento
 - **WHEN** uma pessoa sem autenticação ou com perfil diferente de `admin` tenta registrar um pagamento
 - **THEN** o backend rejeita a solicitação sem alterar registros
 
 ### Requirement: Correções financeiras preservam o histórico
 
-O sistema SHALL preservar mensalidades e pagamentos registrados, permitindo corrigir um pagamento por cancelamento ou estorno rastreável, com motivo, responsável e data, sem apagar fisicamente o registro original.
+O sistema SHALL preservar mensalidades e pagamentos registrados, permitindo corrigir contabilmente um pagamento por cancelamento ou estorno rastreável, com motivo, responsável e data, sem apagar fisicamente o registro original nem iniciar reembolso externo.
 
 #### Scenario: Pagamento corrigido
 - **WHEN** um usuário `admin` corrige um pagamento registrado

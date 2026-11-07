@@ -2,8 +2,8 @@
 
 ## 1. Diagnóstico e modelo de dados Xano
 
-- [ ] 1.1 Fazer pull do workspace Xano para uma pasta isolada, comparar as matrículas e preservar os diffs locais; registrar a estrutura publicada sem incluir registros, tokens ou dados pessoais.
-- [ ] 1.2 Criar tabelas e índices de mensalidades, pagamentos e check-ins, incluindo vínculos, competência, vencimento, responsável e estados de correção; validar cada arquivo XanoScript.
+- [x] 1.1 Fazer pull do workspace Xano para uma pasta isolada, comparar as matrículas e preservar os diffs locais; registrar a estrutura publicada sem incluir registros, tokens ou dados pessoais.
+- [x] 1.2 Criar tabelas e índices de mensalidades, pagamentos e check-ins, incluindo vínculos, competência, vencimento, responsável e estados de correção; validar cada arquivo XanoScript.
 
 ## 2. Geração de mensalidades na matrícula
 
@@ -23,9 +23,9 @@
 
 ## 5. Interfaces Reflex e integração
 
-- [ ] 5.1 Adicionar chamadas tipadas no `XanoClient` para mensalidades, pagamentos, correções e check-ins; cobrir métodos, caminhos, payloads, erros HTTP e respostas inválidas com testes.
-- [ ] 5.2 Criar telas Reflex de mensalidades/pagamentos e check-ins, acessíveis pelo painel administrativo; verificar carregamento, vazio, sucesso, erros e ausência de dados pessoais desnecessários.
-- [ ] 5.3 Executar testes focados e a suíte completa, compilar o app com `reflex compile --dry` e validar todos os XanoScript alterados.
+- [x] 5.1 Adicionar chamadas tipadas no `XanoClient` para mensalidades, pagamentos, correções e check-ins; cobrir métodos, caminhos, payloads, erros HTTP e respostas inválidas com testes.
+- [x] 5.2 Criar telas Reflex de mensalidades/pagamentos e check-ins, acessíveis pelo painel administrativo; verificar carregamento, vazio, sucesso, erros e ausência de dados pessoais desnecessários.
+- [x] 5.3 Executar testes focados e a suíte completa, compilar o app com `reflex compile --dry` e validar todos os XanoScript alterados.
 
 ## 6. Verificação integrada e publicação
 
