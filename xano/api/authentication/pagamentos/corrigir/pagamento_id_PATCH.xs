@@ -14,12 +14,12 @@ query "pagamentos/corrigir/{pagamento_id}" verb=PATCH {
       input = {user_id: $auth.id, required_role: "admin"}
     } as $role_check
 
-    precondition ($input.tipo_correcao == "Cancelado" || $input.tipo_correcao == "Estornado") {
+    precondition ($input.tipo_correcao != "Cancelado" && $input.tipo_correcao != "Estornado") {
       error_type = "inputerror"
       error = "Selecione uma correção válida."
     }
 
-    precondition (($input.motivo|strlen) > 0) {
+    precondition (($input.motivo|strlen) == 0) {
       error_type = "inputerror"
       error = "Informe o motivo da correção."
     }
@@ -37,12 +37,12 @@ query "pagamentos/corrigir/{pagamento_id}" verb=PATCH {
           field_value = $input.pagamento_id
         } as $pagamento_atual
 
-        precondition ($pagamento_atual != null) {
+        precondition ($pagamento_atual == null) {
           error_type = "notfound"
           error = "Pagamento não encontrado."
         }
 
-        precondition ($pagamento_atual.situacao == "Registrado") {
+        precondition ($pagamento_atual.situacao != "Registrado") {
           error_type = "inputerror"
           error = "Somente pagamentos ativos podem ser corrigidos."
         }
