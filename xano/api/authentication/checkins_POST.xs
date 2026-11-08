@@ -21,17 +21,19 @@ query checkins verb=POST {
       field_value = $input.aluno_id
       output = ["id", "nome", "situacao"]
       mock = {
+        "rejects missing student": null
         "rejects inactive student": {id: 2147483647, nome: "Aluno Inativo", situacao: "Inativo"}
+        "rejects no active enrollment": {id: 2147483647, nome: "Aluno Ativo", situacao: "Ativo"}
         "registers checkin": {id: 2147483647, nome: "Aluno Ativo", situacao: "Ativo"}
       }
     } as $aluno
 
-    precondition ($aluno == null) {
+    precondition ($aluno != null) {
       error_type = "notfound"
       error = "Aluno não encontrado."
     }
 
-    precondition ($aluno.situacao != "Ativo") {
+    precondition ($aluno.situacao == "Ativo") {
       error_type = "inputerror"
       error = "Não é possível registrar check-in para aluno inativo."
     }
@@ -47,7 +49,7 @@ query checkins verb=POST {
       }
     } as $matricula
 
-    precondition ($matricula == null) {
+    precondition ($matricula != null) {
       error_type = "inputerror"
       error = "O aluno não possui matrícula vigente."
     }

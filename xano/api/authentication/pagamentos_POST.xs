@@ -14,7 +14,7 @@ query pagamentos verb=POST {
       input = {user_id: $auth.id, required_role: "admin"}
     } as $role_check
 
-    precondition ($input.forma_pagamento != "PIX" && $input.forma_pagamento != "Cartão") {
+    precondition ($input.forma_pagamento == "PIX" || $input.forma_pagamento == "Cartão") {
       error_type = "inputerror"
       error = "A forma de pagamento deve ser PIX ou Cartão."
     }
@@ -45,12 +45,12 @@ query pagamentos verb=POST {
           }
         } as $mensalidade
 
-        precondition ($mensalidade == null) {
+        precondition ($mensalidade != null) {
           error_type = "notfound"
           error = "Mensalidade não encontrada."
         }
 
-        precondition ($input.valor != $mensalidade.valor) {
+        precondition ($input.valor == $mensalidade.valor) {
           error_type = "inputerror"
           error = "O pagamento deve corresponder ao valor integral da mensalidade."
         }
@@ -64,7 +64,7 @@ query pagamentos verb=POST {
           }
         } as $pagamento_ativo
 
-        precondition ($pagamento_ativo) {
+        precondition (!$pagamento_ativo) {
           error_type = "inputerror"
           error = "Esta mensalidade já possui um pagamento ativo."
         }
