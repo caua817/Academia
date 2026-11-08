@@ -13,5 +13,5 @@
 ## 3. Verificação integrada
 
 - [x] 3.1 No runtime, validar com dados sintéticos o cadastro de aluno com apenas nome, confirmar persistência e leitura como `admin`, e verificar que a lista não expõe CPF nem endereço; antes de criar, confirmar que o registro de teste não existe para evitar duplicação.
-- [ ] 3.2 Verificar no runtime a rejeição sem autenticação e com perfil `member`, além da rejeição de cadastro sem nome; confirmar que não há novo registro após as rejeições. Se não houver conta de teste para algum perfil, registrar o bloqueio sem compartilhar credenciais.
+- [x] 3.2 Verificar no runtime a rejeição sem autenticação e com perfil `member`, além da rejeição de cadastro sem nome; confirmar que não há novo registro após as rejeições. `GET /alunos` sem autenticação foi rejeitado com HTTP 401; a sessão `member` recebeu mensagem de falta de permissão; o cadastro sem nome recebeu HTTP 400 (`Missing param: nome`) e a interface mostrou a validação “O nome do aluno é obrigatório.” A listagem permaneceu inalterada; nenhum cadastro válido foi enviado.
 - [x] 3.3 Revisar o diff e executar `xano workspace push --dry-run`; não publicar alterações reais no Xano sem aprovação explícita do grupo.
