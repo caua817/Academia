@@ -29,5 +29,5 @@
 
 ## 6. Verificação integrada e publicação
 
-- [ ] 6.1 Com dados sintéticos, validar no runtime a criação de matrícula com parcelas, pagamento integral, correção rastreável, acesso autorizado e check-in com/sem atraso; confirmar persistência e respostas mínimas sem repetir operações de criação. Testes locais passaram e os endpoints de pagamento/check-in foram publicados; falta a validação integrada no runtime com conta administrativa e dados sintéticos.
+- [ ] 6.1 Com dados sintéticos, validar no runtime a criação de matrícula com parcelas, pagamento integral, correção rastreável, acesso autorizado e check-in com/sem atraso; confirmar persistência e respostas mínimas sem repetir operações de criação. Testes locais e compilação Reflex passaram; os endpoints foram publicados. Verificações sem autenticação retornaram HTTP 401 nas consultas de mensalidades, pagamentos e check-ins, e nas tentativas de pagamento, correção e check-in com IDs sintéticos inexistentes. A validação de gravações e persistência como `admin` permanece pendente até haver ambiente de staging com dados sintéticos; não gravar no workspace com dados reais.
 - [x] 6.2 Revisar o diff e executar `xano workspace push --dry-run` limitado aos arquivos da change; realizar publicação real somente após aprovação explícita e, então, repetir as verificações de runtime.
