@@ -15,7 +15,7 @@ Consulte [proposal.md](./proposal.md) e as deltas de `employee-management` e `au
 
 **Non-Goals:**
 
-- Criar outra tela de gestão de funcionários ou alterar o formulário Reflex existente.
+- Criar outra tela de gestão de funcionários; a tela existente só será ajustada para refletir a proteção de contas `admin`.
 - Remover o papel legado `member` ou conceder a recepcionistas e instrutores as permissões administrativas existentes.
 - Publicar alterações no workspace Xano ou modificar registros reais sem aprovação explícita.
 - Implementar modalidades, sessões ou reservas, que permanecem na change `fase-dois-operacao`.
@@ -40,11 +40,11 @@ O endpoint de convite cria a conta sem senha definida pelo administrador e envia
 
 Alternativa descartada: aceitar uma senha no formulário administrativo, o que aumentaria exposição e contrariaria o contrato Reflex existente.
 
-### Preservar ao menos um administrador ativo
+### Impedir desativação ou rebaixamento de contas administrativas
 
-Desativar ou alterar o papel do último administrador ativo é rejeitado. A verificação e a atualização ocorrem numa transação serializável para evitar que solicitações simultâneas removam o último acesso administrativo.
+Por decisão do grupo, a aplicação rejeitará a desativação ou o rebaixamento de qualquer conta com perfil `admin`, ainda que existam outros administradores. Essa restrição evita que operações concorrentes removam o acesso administrativo sem depender de garantias de isolamento que não puderam ser confirmadas no ambiente Xano disponível. A reativação de uma conta `admin` legada inativa continua permitida.
 
-Alternativa descartada: permitir a operação e depender de intervenção manual para recuperar o acesso ao sistema.
+O endpoint continuará permitindo a edição de nome e e-mail de contas `admin`; a interface manterá o perfil fixo e não oferecerá a ação de desativação. O desligamento ou rebaixamento administrativo exigirá um processo fora da aplicação, aprovado e executado pelo grupo.
 
 ### Encaminhar o token de sessão no cliente HTTP
 
@@ -57,14 +57,15 @@ Alternativa descartada: manter o placeholder atual, que impede qualquer chamada 
 - **[Risco]** O provedor de e-mail pode falhar depois da criação da conta. → **Mitigação:** manter a conta pendente sem senha, reportar a falha e permitir que a mesma operação reenvie um link sem duplicar o usuário.
 - **[Risco]** Contas existentes não têm a nova situação preenchida. → **Mitigação:** interpretar valor ausente como ativo e não alterar os papéis legados.
 - **[Risco]** Tokens de usuários desativados continuam criptograficamente válidos até expirarem. → **Mitigação:** conferir a situação atual na identidade e na autorização compartilhada a cada solicitação protegida.
+- **[Trade-off]** Nenhuma conta `admin` poderá ser desligada pela aplicação, mesmo quando houver outros administradores. → **Mitigação:** ocultar a ação na interface e exigir processo administrativo externo para esses casos.
 - **[Risco]** O workspace publicado não contém os endpoints e não há uma sessão administrativa disponível para leitura autenticada. → **Mitigação:** validar os arquivos localmente e usar apenas `xano workspace push --dry-run`; publicação e teste no runtime aguardam aprovação explícita.
 
 ## Migration Plan
 
 1. Manter o pull isolado como referência e revisar o diff local antes de editar arquivos Xano.
 2. Estender a tabela `user`, a autorização compartilhada e os caminhos de login sem remover ou reclassificar contas existentes.
-3. Implementar os endpoints administrativos nos caminhos já usados pelo `XanoClient`.
-4. Corrigir o cabeçalho autenticado do cliente e executar testes direcionados, validação XanoScript e OpenSpec.
+3. Implementar os endpoints administrativos nos caminhos já usados pelo `XanoClient`, protegendo todas as contas `admin` contra desativação e rebaixamento.
+4. Ajustar a tela Reflex existente para refletir essa restrição, corrigir o cabeçalho autenticado do cliente e executar testes direcionados, validação XanoScript e OpenSpec.
 5. Revisar o diff e executar dry-run seletivo. Não fazer push real sem aprovação explícita.
 
 Rollback: interromper a publicação se a validação falhar. Reverter as alterações de código sem apagar contas ou outros registros; manter campos e valores legados compatíveis.

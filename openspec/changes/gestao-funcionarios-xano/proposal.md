@@ -9,9 +9,11 @@ A interface Reflex já oferece gestão de funcionários e o `XanoClient` já cha
 - Implementar no Xano os endpoints de funcionários já consumidos pelo cliente: listagem, detalhes, convite, edição, ativação e desativação.
 - Armazenar perfis e situação de funcionários na conta autenticada, preservando compatibilidade com contas e papéis existentes.
 - Aplicar autorização administrativa no backend e impedir que contas inativas iniciem ou usem sessões autenticadas.
+- Impedir que a aplicação desative ou rebaixe qualquer conta `admin`, sem depender de uma transação serializável.
 - Enviar convite para definição de senha sem solicitar, retornar ou registrar a senha do funcionário.
 - Corrigir o cliente HTTP para enviar o token real de sessão no cabeçalho `Authorization` e cobrir esse contrato com testes.
-- Manter a tela Reflex existente; não criar uma segunda interface de funcionários nem alterar dados reais ou publicar no Xano sem aprovação explícita.
+- Manter a tela Reflex existente, ajustando-a para não oferecer desativação ou rebaixamento de contas `admin`; não criar uma segunda interface.
+- Não alterar dados reais nem publicar no Xano sem aprovação explícita.
 
 ## Capabilities
 
@@ -27,5 +29,5 @@ Nenhuma.
 ## Impact
 
 - Tabela `user`, autorização reutilizável e endpoints XanoScript de funcionários e autenticação.
-- `XanoClient` e testes do contrato HTTP usado pela tela Reflex existente.
+- `XanoClient`, tela Reflex existente e testes dos contratos usados pela gestão de funcionários.
 - A publicação no workspace Xano permanece fora desta change sem aprovação explícita; a validação de sincronização será somente por dry-run.

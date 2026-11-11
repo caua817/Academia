@@ -22,13 +22,29 @@ O sistema SHALL disponibilizar operações autenticadas para listar e consultar 
 - **WHEN** um usuário `admin` altera nome, e-mail ou perfil de um funcionário existente
 - **THEN** a API persiste os campos aceitos sem alterar a situação da conta nem expor credenciais
 
-#### Scenario: Administrador altera situação da conta
-- **WHEN** um usuário `admin` ativa ou desativa uma conta
+#### Scenario: Administrador altera situação de uma conta não administrativa
+- **WHEN** um usuário `admin` ativa ou desativa uma conta de `recepcionista` ou `instrutor`
 - **THEN** a API atualiza sua situação sem apagar a conta e retorna os dados operacionais atualizados
 
-#### Scenario: Impedir remoção do último administrador ativo
-- **WHEN** uma operação desativa ou altera o perfil do último usuário `admin` ativo
-- **THEN** a API rejeita a operação e mantém ao menos um administrador ativo
+#### Scenario: Administrador reativa conta administrativa legada
+- **WHEN** um usuário `admin` reativa uma conta `admin` que já estava inativa
+- **THEN** a API ativa a conta e retorna os dados operacionais atualizados
+
+#### Scenario: Impedir desativação ou rebaixamento de qualquer administrador
+- **WHEN** uma operação tenta desativar uma conta `admin` ou alterar seu perfil para não administrativo
+- **THEN** a API rejeita a operação e não altera a conta, mesmo que existam outros administradores ativos
+
+### Requirement: A interface reflete a proteção de contas administrativas
+
+O sistema SHALL permitir a edição de nome e e-mail de contas `admin`, mas SHALL manter seu perfil administrativo e não oferecer desativação para essas contas.
+
+#### Scenario: Administrador edita outra conta administrativa
+- **WHEN** um usuário `admin` abre o formulário de uma conta cujo perfil é `admin`
+- **THEN** o formulário permite editar nome e e-mail, mantém o perfil como `admin` e não permite rebaixá-lo
+
+#### Scenario: Administrador consulta conta administrativa
+- **WHEN** um usuário `admin` visualiza uma conta cujo perfil é `admin`
+- **THEN** a interface não oferece ação para desativá-la
 
 #### Scenario: Usuário sem autorização administra funcionários
 - **WHEN** uma pessoa sem sessão ou sem perfil `admin` consulta ou altera funcionários
