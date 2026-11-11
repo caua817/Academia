@@ -19,4 +19,4 @@
 ## 4. Verificação e sincronização
 
 - [x] 4.1 Executar testes direcionados do cliente, validação XanoScript dos arquivos alterados, `openspec validate --all` e `reflex compile --dry`; registrar os resultados sem criar dados reais.
-- [ ] 4.2 Revisar `git diff` e executar `xano workspace push --dry-run` limitado aos arquivos desta change; confirmar que nenhuma publicação real foi feita sem aprovação explícita.
+- [x] 4.2 Revisar `git diff` e executar `xano workspace push --dry-run` limitado aos arquivos desta change; confirmar que nenhuma publicação real foi feita sem aprovação explícita.
