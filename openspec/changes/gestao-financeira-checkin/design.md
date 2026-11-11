@@ -58,6 +58,7 @@ Alternativa descartada: consultar dados financeiros diretamente de tabelas do fr
 - **[Risco]** A restrição exclusiva a `admin` difere da operação descrita no overview. → **Mitigação:** documentar a decisão da change e manter o backend como autoridade; rever o perfil em change futura se o grupo desejar.
 - **[Risco]** Cancelar um pagamento pode reabrir uma mensalidade já vencida. → **Mitigação:** recalcular o estado imediatamente e exibir a correção e o motivo no histórico.
 - **[Risco]** Arquivos Xano locais podem divergir do workspace publicado. → **Mitigação:** fazer pull isolado e comparar antes da implementação; validar XanoScript e revisar o dry-run. Qualquer publicação real exige aprovação explícita do grupo.
+- **[Risco]** Dados sintéticos de validação no workspace atual podem aparecer em relatórios. → **Mitigação:** criar somente após aprovação explícita, identificá-los com o prefixo `TESTE-VALIDACAO`, não usar dados pessoais reais, executar as criações uma única vez, registrar os IDs e não apagar registros financeiros nem alterar registros existentes.
 
 ## Migration Plan
 
@@ -66,6 +67,6 @@ Alternativa descartada: consultar dados financeiros diretamente de tabelas do fr
 3. Implementar clientes e telas Reflex com testes focados e dados exclusivamente sintéticos.
 4. Não gerar cobranças retroativas automaticamente para matrículas existentes antes da implantação.
 5. Validar XanoScript, testes, compilação Reflex e `xano workspace push --dry-run`; pedir aprovação explícita antes de qualquer push real.
-6. Após a publicação aprovada, validar cadastro de matrícula, parcelas, pagamento/correção e check-in no runtime.
+6. Após a publicação aprovada, validar cadastro de matrícula, parcelas, pagamento/correção e check-in no runtime. Se não houver staging, executar a validação no workspace atual somente após autorização explícita, usando registros identificados com `TESTE-VALIDACAO`, sem dados pessoais reais e sem alterar registros existentes. Registrar os IDs persistidos, não apagar registros financeiros e não repetir operações de criação após uma resposta incerta.
 
 Rollback: interromper a publicação se a validação falhar. Não excluir fisicamente matrículas, mensalidades, pagamentos ou check-ins; corrigir por operações rastreáveis compatíveis com o domínio.
