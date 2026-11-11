@@ -7,11 +7,15 @@ query "auth/me" verb=GET {
   }
 
   stack {
+    function.run "Quick Start/enforce_active_user" {
+      input = {user_id: $auth.id}
+    } as $active_user_check
+
     // Get the user record based on the auth ID
     db.get user {
       field_name = "id"
       field_value = $auth.id
-      output = ["id", "created_at", "name", "email", "role"]
+      output = ["id", "created_at", "name", "email", "role", "situacao"]
     } as $user
   
     // Create an event log for get user record
@@ -19,7 +23,7 @@ query "auth/me" verb=GET {
       input = {
         user_id : $user.id
         action  : "get_auth_user"
-        metadata: $user
+        metadata: {}
       }
     } as $event_log
   }

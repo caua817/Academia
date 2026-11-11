@@ -12,7 +12,7 @@ query "auth/login" verb=POST {
     db.get user {
       field_name = "email"
       field_value = $input.email
-      output = ["id", "created_at", "name", "email", "password", "role"]
+      output = ["id", "created_at", "name", "email", "password", "role", "situacao"]
     } as $user
   
     // Check to make sure a user with that email exists
@@ -32,6 +32,10 @@ query "auth/login" verb=POST {
       error_type = "accessdenied"
       error = "Invalid Credentials."
     }
+
+    function.run "Quick Start/enforce_active_user" {
+      input = {user_id: $user.id}
+    } as $active_user_check
   
     // Create an authentication token
     security.create_auth_token {
@@ -43,7 +47,7 @@ query "auth/login" verb=POST {
   
     // Create an event log for login
     function.run "Quick Start/log_event" {
-      input = {user_id: $user.id, action: "login", metadata: $user}
+      input = {user_id: $user.id, action: "login", metadata: {}}
     } as $event_log
   }
 

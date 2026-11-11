@@ -7,6 +7,10 @@ query "logs/user/my_events" verb=GET {
   }
 
   stack {
+    function.run "Quick Start/enforce_active_user" {
+      input = {user_id: $auth.id}
+    } as $active_user_check
+
     // Retrieve event logs for the authenticated user
     db.query event_log {
       where = $db.event_log.user_id == $auth.id

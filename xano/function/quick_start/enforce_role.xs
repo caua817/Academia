@@ -9,9 +9,13 @@ function "Quick Start/enforce_role" {
   }
 
   stack {
+    function.run "Quick Start/enforce_active_user" {
+      input = {user_id: $input.user_id}
+    } as $active_user_check
+
     // Defines a hierarchy of roles with numerical levels.
     var $role_hierarchy {
-      value = {admin: 2, member: 1}
+      value = {admin: 2, member: 1, recepcionista: 1, instrutor: 1}
     }
   
     // Retrieve the user's role from the database.

@@ -24,6 +24,10 @@ query "reset/update_password" verb=POST {
     precondition ($user.id == $auth.id) {
       error_type = "accessdenied"
     }
+
+    function.run "Quick Start/enforce_active_user" {
+      input = {user_id: $auth.id}
+    } as $active_user_check
   
     // Update user record with the new password
     db.edit user {
@@ -37,7 +41,7 @@ query "reset/update_password" verb=POST {
       input = {
         user_id : $user.id
         action  : "reset_password"
-        metadata: $user
+        metadata: {}
       }
     } as $event_log
   }
