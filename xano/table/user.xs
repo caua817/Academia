@@ -9,10 +9,16 @@ table user {
     email? email filters=trim|lower
     password? password filters=min:8|minAlpha:1|minDigit:1
   
-    // The role of the user within their company (e.g., 'admin', 'member').
+    // Perfil operacional do funcionário.
     enum role? {
-      values = ["admin", "member"]
+      values = ["admin", "member", "recepcionista", "instrutor"]
     }
+
+    enum situacao?=Ativo {
+      values = ["Ativo", "Inativo"]
+    }
+    // Campo interno para serializar alterações da agenda do instrutor.
+    timestamp? agenda_lock_at?
   
     object password_reset? {
       schema {

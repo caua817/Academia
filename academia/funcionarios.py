@@ -2,10 +2,26 @@ import re
 
 import reflex as rx
 
+from academia.access_control import AdminAccessState, begin_admin_check
 from academia.login import LoginState
 from academia.services.xano_client import XanoAPIError, XanoClient
 
 EMPLOYEE_ROLES = ("admin", "recepcionista", "instrutor")
+
+
+async def update_admin_access(
+    state: rx.State,
+    is_admin: bool,
+    error_message: str = "",
+    route: str = "",
+) -> None:
+    if not hasattr(state, "get_state"):
+        return
+    access_state = await state.get_state(AdminAccessState)
+    access_state.is_admin = is_admin
+    access_state.is_verifying = False
+    access_state.error_message = error_message
+    access_state.authorized_route = route if is_admin else ""
 
 
 def filter_funcionarios(
@@ -147,6 +163,7 @@ class FuncionariosState(rx.State):
 
     @rx.event
     async def load_funcionarios(self):
+        await begin_admin_check(self)
         self.is_loading = True
         self.error_message = ""
         yield
@@ -154,6 +171,7 @@ class FuncionariosState(rx.State):
         try:
             token = await self._auth_token()
             if not token:
+                self._clear_sensitive_data()
                 await self._clear_login()
                 yield rx.redirect("/login")
                 return
@@ -165,6 +183,11 @@ class FuncionariosState(rx.State):
                 self.error_message = self._api_error_message(
                     error,
                     "verificar seu acesso",
+                )
+                await update_admin_access(
+                    self,
+                    False,
+                    self.error_message,
                 )
                 if error.status_code == 401:
                     await self._clear_login()
@@ -178,7 +201,9 @@ class FuncionariosState(rx.State):
                 self.error_message = (
                     "Você não tem permissão para acessar a gestão de funcionários."
                 )
+                await update_admin_access(self, False, self.error_message)
                 return
+            await update_admin_access(self, True, route="funcionarios")
 
             expired = await self._reload_funcionarios(
                 token,
@@ -188,6 +213,12 @@ class FuncionariosState(rx.State):
                 await self._clear_login()
                 yield rx.redirect("/login")
         finally:
+            await update_admin_access(
+                self,
+                self.is_admin,
+                self.error_message if not self.is_admin else "",
+                route="funcionarios",
+            )
             self.is_loading = False
 
     @rx.event

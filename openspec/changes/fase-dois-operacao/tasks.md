@@ -22,10 +22,10 @@
 
 ## 5. Clientes e interface Reflex
 
-- [ ] 5.1 Adicionar chamadas tipadas no `XanoClient` para modalidades, sessões, reservas e relatórios; cobrir caminhos, métodos, payloads, estados HTTP e respostas inválidas com transportes mockados.
-- [ ] 5.2 Criar telas administrativas de modalidades, agenda de sessões e reservas com carregamento, vazio, sucesso, erros, ocupação e ações compatíveis com o estado da sessão; verificar os fluxos sem dados pessoais desnecessários.
-- [ ] 5.3 Criar tela de relatórios com intervalo de datas e métricas agregadas; verificar estados de carregamento/vazio/erro e conferir que não aparecem identificadores ou dados pessoais.
-- [ ] 5.4 Proteger menu e acesso direto a todas as páginas de gestão existentes e novas por perfil `admin`, redirecionando sessão ausente ao login e negando perfil diferente; verificar URLs diretas e manter as APIs como autoridade.
+- [x] 5.1 Adicionar chamadas tipadas no `XanoClient` para modalidades, sessões, reservas e relatórios; cobrir caminhos, métodos, payloads, estados HTTP e respostas inválidas com transportes mockados.
+- [x] 5.2 Criar telas administrativas de modalidades, agenda de sessões e reservas com carregamento, vazio, sucesso, erros, ocupação e ações compatíveis com o estado da sessão; verificar os fluxos sem dados pessoais desnecessários.
+- [x] 5.3 Criar tela de relatórios com intervalo de datas e métricas agregadas; verificar estados de carregamento/vazio/erro e conferir que não aparecem identificadores ou dados pessoais.
+- [x] 5.4 Proteger menu e acesso direto a todas as páginas de gestão existentes e novas por perfil `admin`, redirecionando sessão ausente ao login e negando perfil diferente; verificar URLs diretas e manter as APIs como autoridade.
 
 ## 6. Verificação integrada
 

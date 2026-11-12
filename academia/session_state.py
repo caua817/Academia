@@ -2,12 +2,14 @@ import reflex as rx
 
 
 async def clear_app_session(state: rx.State) -> None:
+    from academia.access_control import AdminAccessState
     from academia.academia import DashboardState
     from academia.alunos import AlunosState
     from academia.financeiro import CheckinsState, FinanceiroState
     from academia.funcionarios import FuncionariosState
     from academia.login import LoginState
     from academia.matriculas import MatriculasState
+    from academia.operacao import OperacaoState
     from academia.planos import PlanosState
 
     dashboard_state = await state.get_state(DashboardState)
@@ -44,6 +46,12 @@ async def clear_app_session(state: rx.State) -> None:
 
     funcionarios_state = await state.get_state(FuncionariosState)
     funcionarios_state._clear_sensitive_data()
+
+    operacao_state = await state.get_state(OperacaoState)
+    operacao_state._clear_sensitive_data()
+
+    access_state = await state.get_state(AdminAccessState)
+    access_state.clear()
 
     login_state = await state.get_state(LoginState)
     login_state.auth_token = ""

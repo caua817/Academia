@@ -1,5 +1,6 @@
 import reflex as rx
 
+from academia.access_control import begin_admin_check, require_admin
 from academia.login import LoginState
 from academia.services.xano_client import XanoAPIError, XanoClient
 
@@ -104,16 +105,17 @@ class AlunosState(rx.State):
 
     @rx.event
     async def load_alunos(self):
+        await begin_admin_check(self)
         self.is_loading = True
         self.error_message = ""
         yield
 
-        token = await self._auth_token()
+        token, should_redirect = await require_admin(self, "alunos")
         if not token:
             self.alunos = []
             self.is_loading = False
-            await self._clear_login()
-            yield rx.redirect("/login")
+            if should_redirect:
+                yield rx.redirect("/login")
             return
 
         try:

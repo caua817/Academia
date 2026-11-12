@@ -1,5 +1,6 @@
 import reflex as rx
 
+from academia.access_control import begin_admin_check, require_admin
 from academia.login import LoginState
 from academia.planos import format_currency
 from academia.services.xano_client import XanoAPIError, XanoClient
@@ -90,21 +91,20 @@ class FinanceiroState(rx.State):
 
     @rx.event
     async def load_financeiro(self):
+        await begin_admin_check(self)
         self.is_loading = True
         self.error_message = ""
         yield
 
-        login_state = await self.get_state(LoginState)
-        if not login_state.auth_token:
-            from academia.session_state import clear_app_session
-
-            await clear_app_session(self)
+        token, should_redirect = await require_admin(self, "financeiro")
+        if not token:
             self.is_loading = False
-            yield rx.redirect("/login")
+            if should_redirect:
+                yield rx.redirect("/login")
             return
 
         expired = self._reload(
-            login_state.auth_token,
+            token,
             "carregar os dados financeiros",
         )
         self.is_loading = False
@@ -325,21 +325,20 @@ class CheckinsState(rx.State):
 
     @rx.event
     async def load_checkins(self):
+        await begin_admin_check(self)
         self.is_loading = True
         self.error_message = ""
         yield
 
-        login_state = await self.get_state(LoginState)
-        if not login_state.auth_token:
-            from academia.session_state import clear_app_session
-
-            await clear_app_session(self)
+        token, should_redirect = await require_admin(self, "checkins")
+        if not token:
             self.is_loading = False
-            yield rx.redirect("/login")
+            if should_redirect:
+                yield rx.redirect("/login")
             return
 
         expired = self._reload(
-            login_state.auth_token,
+            token,
             "carregar os check-ins",
         )
         self.is_loading = False

@@ -1,5 +1,10 @@
 import reflex as rx
 
+from academia.access_control import (
+    AdminAccessState,
+    begin_admin_check,
+    require_admin,
+)
 from academia.alunos import AlunosState, student_management_content
 from academia.financeiro import (
     CheckinsState,
@@ -8,8 +13,15 @@ from academia.financeiro import (
     financeiro_page,
 )
 from academia.funcionarios import FuncionariosState, funcionarios_page
-from academia.login import LoginState, login_page
+from academia.login import login_page
 from academia.matriculas import MatriculasState, matriculas_page
+from academia.operacao import (
+    OperacaoState,
+    modalidades_page,
+    relatorios_page,
+    reservas_page,
+    sessoes_page,
+)
 from academia.planos import PlanosState, planos_page
 from academia.session_state import clear_app_session
 from academia.services.xano_client import XanoAPIError, XanoClient
@@ -55,19 +67,21 @@ class DashboardState(rx.State):
         return bool(self.filtered_alunos)
 
     async def load_alunos(self):
+        await begin_admin_check(self)
         self.is_loading = True
         self.error_message = ""
         yield
 
-        login_state = await self.get_state(LoginState)
-        if not login_state.auth_token:
-            await clear_app_session(self)
+        token, should_redirect = await require_admin(self, "dashboard")
+        if not token:
+            self.alunos = []
             self.is_loading = False
-            yield rx.redirect("/login")
+            if should_redirect:
+                yield rx.redirect("/login")
             return
 
         try:
-            self.alunos = XanoClient.get_alunos(login_state.auth_token)
+            self.alunos = XanoClient.get_alunos(token)
         except XanoAPIError as error:
             self.alunos = []
             if error.status_code == 401:
@@ -181,36 +195,69 @@ def sidebar(active_page: str) -> rx.Component:
             width="100%",
             margin_top="8",
         ),
-        rx.vstack(
-            nav_link("Visão geral", "layout-dashboard", "/", active_page == "dashboard"),
-            nav_link("Alunos", "users-round", "/alunos", active_page == "alunos"),
-            nav_link("Planos", "credit-card", "/planos", active_page == "planos"),
-            nav_link(
-                "Matrículas",
-                "clipboard-list",
-                "/matriculas",
-                active_page == "matriculas",
+        rx.cond(
+            AdminAccessState.is_admin
+            & (AdminAccessState.authorized_route == active_page),
+            rx.vstack(
+                nav_link(
+                    "Visão geral",
+                    "layout-dashboard",
+                    "/",
+                    active_page == "dashboard",
+                ),
+                nav_link("Alunos", "users-round", "/alunos", active_page == "alunos"),
+                nav_link("Planos", "credit-card", "/planos", active_page == "planos"),
+                nav_link(
+                    "Matrículas",
+                    "clipboard-list",
+                    "/matriculas",
+                    active_page == "matriculas",
+                ),
+                nav_link(
+                    "Financeiro",
+                    "wallet",
+                    "/financeiro",
+                    active_page == "financeiro",
+                ),
+                nav_link(
+                    "Check-ins",
+                    "scan-line",
+                    "/checkins",
+                    active_page == "checkins",
+                ),
+                nav_link(
+                    "Funcionários",
+                    "users-round",
+                    "/funcionarios",
+                    active_page == "funcionarios",
+                ),
+                nav_link(
+                    "Modalidades",
+                    "dumbbell",
+                    "/modalidades",
+                    active_page == "modalidades",
+                ),
+                nav_link(
+                    "Agenda de aulas",
+                    "calendar-days",
+                    "/sessoes",
+                    active_page == "sessoes",
+                ),
+                nav_link(
+                    "Reservas",
+                    "ticket-check",
+                    "/reservas",
+                    active_page == "reservas",
+                ),
+                nav_link(
+                    "Relatórios",
+                    "chart-no-axes-column-increasing",
+                    "/relatorios",
+                    active_page == "relatorios",
+                ),
+                spacing="2",
+                width="100%",
             ),
-            nav_link(
-                "Financeiro",
-                "wallet",
-                "/financeiro",
-                active_page == "financeiro",
-            ),
-            nav_link(
-                "Check-ins",
-                "scan-line",
-                "/checkins",
-                active_page == "checkins",
-            ),
-            nav_link(
-                "Funcionários",
-                "users-round",
-                "/funcionarios",
-                active_page == "funcionarios",
-            ),
-            spacing="2",
-            width="100%",
         ),
         rx.spacer(),
         rx.callout(
@@ -484,6 +531,10 @@ def app_shell(
         "financeiro": FinanceiroState.load_financeiro,
         "checkins": CheckinsState.load_checkins,
         "funcionarios": FuncionariosState.load_funcionarios,
+        "modalidades": OperacaoState.load_modalidades,
+        "sessoes": OperacaoState.load_sessoes,
+        "reservas": OperacaoState.load_reservas_page,
+        "relatorios": OperacaoState.load_relatorios,
     }[active_page]
     is_loading = {
         "dashboard": DashboardState.is_loading,
@@ -493,7 +544,15 @@ def app_shell(
         "financeiro": FinanceiroState.is_loading,
         "checkins": CheckinsState.is_loading,
         "funcionarios": FuncionariosState.is_loading,
+        "modalidades": OperacaoState.is_loading,
+        "sessoes": OperacaoState.is_loading,
+        "reservas": OperacaoState.is_loading,
+        "relatorios": OperacaoState.is_loading,
     }[active_page]
+    is_verifying_access = AdminAccessState.is_verifying | (
+        (AdminAccessState.authorized_route != active_page)
+        & (AdminAccessState.error_message == "")
+    )
     return rx.flex(
         sidebar(active_page),
         rx.vstack(
@@ -527,7 +586,37 @@ def app_shell(
                 spacing="4",
                 margin_bottom="6",
             ),
-            content,
+            rx.cond(
+                AdminAccessState.is_admin
+                & (AdminAccessState.authorized_route == active_page),
+                content,
+                rx.center(
+                    rx.vstack(
+                        rx.cond(
+                            is_verifying_access,
+                            rx.spinner(size="3"),
+                            rx.icon("shield-alert", size=24, color="#f87171"),
+                        ),
+                        rx.text(
+                            rx.cond(
+                                is_verifying_access,
+                                "Verificando acesso administrativo...",
+                                rx.cond(
+                                    AdminAccessState.error_message != "",
+                                    AdminAccessState.error_message,
+                                    "Acesso restrito a administradores.",
+                                ),
+                            ),
+                            color="var(--gray-9)",
+                            role="status",
+                        ),
+                        align="center",
+                        spacing="3",
+                    ),
+                    min_height="220px",
+                    width="100%",
+                ),
+            ),
             width="100%",
             max_width="1440px",
             padding=["5", "8"],
@@ -550,4 +639,8 @@ app.add_page(matriculas_page, route="/matriculas")
 app.add_page(financeiro_page, route="/financeiro")
 app.add_page(checkins_page, route="/checkins")
 app.add_page(funcionarios_page, route="/funcionarios")
+app.add_page(modalidades_page, route="/modalidades")
+app.add_page(sessoes_page, route="/sessoes")
+app.add_page(reservas_page, route="/reservas")
+app.add_page(relatorios_page, route="/relatorios")
 app.add_page(login_page, route="/login")
