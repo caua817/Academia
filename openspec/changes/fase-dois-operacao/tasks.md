@@ -3,7 +3,7 @@
 ## 1. Diagnóstico e modelo de dados Xano
 
 - [ ] 1.1 Fazer pull do workspace Xano em diretório isolado e comparar os arquivos locais com o publicado; verificar especificamente os endpoints de funcionários por leitura autenticada e registrar divergências sem publicar nem alterar dados.
-- [ ] 1.2 Definir e implementar as tabelas e índices de modalidades, sessões e reservas, incluindo estados, chaves de unicidade e controle de capacidade; validar os arquivos XanoScript alterados.
+- [x] 1.2 Definir e implementar as tabelas e índices de modalidades, sessões e reservas, incluindo estados, chaves de unicidade e controle de capacidade; validar os arquivos XanoScript alterados.
 
 ## 2. APIs de modalidades e sessões
 
