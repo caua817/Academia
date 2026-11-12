@@ -33,8 +33,6 @@ query sessoes verb=POST {
     }
 
     db.transaction {
-      isolation = "serializable"
-
       stack {
         db.get user {
           field_name = "id"

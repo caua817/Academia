@@ -28,4 +28,5 @@ table sessao_aula {
     {type: "btree", field: [{name: "modalidade_id"}, {name: "inicio", op: "asc"}]}
     {type: "btree", field: [{name: "situacao"}, {name: "inicio", op: "asc"}]}
   ]
+  guid = "Ia1CcCTWa3ReRkMvlURi3MI3Slw"
 }

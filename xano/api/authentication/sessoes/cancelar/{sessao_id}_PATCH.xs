@@ -13,8 +13,6 @@ query "sessoes/cancelar/{sessao_id}" verb=PATCH {
     } as $role_check
 
     db.transaction {
-      isolation = "serializable"
-
       stack {
         db.get sessao_aula {
           field_name = "id"

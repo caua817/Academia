@@ -31,4 +31,4 @@
 
 - [ ] 6.1 Confirmar se a API publicada de funcionários atende aos contratos existentes por leitura autenticada; se ausente ou incompatível, documentar o bloqueio e não implementar nem publicar endpoints de funcionários nesta change.
 - [ ] 6.2 Executar testes direcionados e a suíte existente, compilar com `reflex compile --dry`, validar OpenSpec e XanoScript, e fazer smoke test das páginas e APIs sem gravações repetidas nem alteração de dados reais.
-- [ ] 6.3 Revisar o diff e executar `xano workspace push --dry-run` limitado aos arquivos da change; solicitar aprovação explícita antes de publicação real e confirmar o runtime após eventual publicação aprovada.
+- [x] 6.3 Revisar o diff e executar `xano workspace push --dry-run` limitado aos arquivos da change; solicitar aprovação explícita antes de publicação real e confirmar o runtime após eventual publicação aprovada.

@@ -29,8 +29,6 @@ query "sessoes/atualizar/{sessao_id}" verb=PUT {
     }
 
     db.transaction {
-      isolation = "serializable"
-
       stack {
         db.get sessao_aula {
           field_name = "id"
@@ -58,12 +56,6 @@ query "sessoes/atualizar/{sessao_id}" verb=PUT {
           error = "Somente sessões futuras agendadas podem ser editadas."
         }
 
-        db.edit user {
-          field_name = "id"
-          field_value = $sessao_atual.instrutor_id
-          data = {agenda_lock_at: now}
-        } as $instrutor_anterior_bloqueado
-
         db.get user {
           field_name = "id"
           field_value = $input.instrutor_id
@@ -74,11 +66,38 @@ query "sessoes/atualizar/{sessao_id}" verb=PUT {
           error = "Instrutor não encontrado."
         }
 
-        db.edit user {
-          field_name = "id"
-          field_value = $input.instrutor_id
-          data = {agenda_lock_at: now}
-        } as $instrutor_bloqueado
+        conditional {
+          if ($sessao_atual.instrutor_id <= $input.instrutor_id) {
+            db.edit user {
+              field_name = "id"
+              field_value = $sessao_atual.instrutor_id
+              data = {agenda_lock_at: now}
+            } as $instrutor_anterior_bloqueado
+
+            conditional {
+              if ($sessao_atual.instrutor_id != $input.instrutor_id) {
+                db.edit user {
+                  field_name = "id"
+                  field_value = $input.instrutor_id
+                  data = {agenda_lock_at: now}
+                } as $instrutor_novo_bloqueado
+              }
+            }
+          }
+          else {
+            db.edit user {
+              field_name = "id"
+              field_value = $input.instrutor_id
+              data = {agenda_lock_at: now}
+            } as $instrutor_novo_bloqueado
+
+            db.edit user {
+              field_name = "id"
+              field_value = $sessao_atual.instrutor_id
+              data = {agenda_lock_at: now}
+            } as $instrutor_anterior_bloqueado
+          }
+        }
 
         db.get user {
           field_name = "id"

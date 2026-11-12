@@ -18,8 +18,6 @@ query reservas verb=POST {
     }
 
     db.transaction {
-      isolation = "serializable"
-
       stack {
         db.get sessao_aula {
           field_name = "id"

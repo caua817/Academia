@@ -16,8 +16,6 @@ query "reservas/resultado/{reserva_id}" verb=PATCH {
     } as $role_check
 
     db.transaction {
-      isolation = "serializable"
-
       stack {
         db.get reserva_aula {
           field_name = "id"

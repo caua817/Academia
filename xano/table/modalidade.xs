@@ -17,4 +17,5 @@ table modalidade {
     {type: "btree", field: [{name: "situacao", op: "asc"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
   ]
+  guid = "67VHV-Sv0XKTnjmJ4udUmZ-MNa8"
 }

@@ -24,4 +24,5 @@ table reserva_aula {
     {type: "btree", field: [{name: "aluno_id"}, {name: "sessao_aula_id"}]}
     {type: "btree", field: [{name: "reservado_em", op: "desc"}]}
   ]
+  guid = "X61CgmmpBq8c8xQDFtbZUwesTQI"
 }
