@@ -7,6 +7,7 @@ import httpx
 from academia.funcionarios import (
     FuncionariosState,
     employee_form_dialog,
+    employee_row,
     filter_funcionarios,
     validate_funcionario_fields,
 )
@@ -216,6 +217,7 @@ class EmployeeStateHarness:
         self.form_error = ""
         self.is_form_open = False
         self.is_editing = False
+        self.is_editing_admin = False
         self.funcionario_id = 0
         self.form_name = ""
         self.form_email = ""
@@ -411,6 +413,62 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Alteração rejeitada", state.form_error)
         self.assertEqual(state.success_message, "")
 
+    async def test_admin_edit_preserves_admin_role_in_update_payload(self):
+        state = EmployeeStateHarness()
+        state.is_admin = True
+        state.is_editing = True
+        state.is_editing_admin = True
+        state.funcionario_id = 7
+        state.form_name = "Admin atualizado"
+        state.form_email = "admin@example.com"
+        state.form_role = "instrutor"
+        with (
+            patch(
+                "academia.funcionarios.XanoClient.update_funcionario",
+                return_value={"id": 7},
+            ) as update,
+            patch(
+                "academia.funcionarios.XanoClient.get_funcionarios",
+                return_value=[],
+            ),
+        ):
+            await self.run_event("save_funcionario", state)
+
+        self.assertEqual(update.call_args.args[2]["role"], "admin")
+
+    async def test_editing_admin_ignores_role_change_event(self):
+        state = EmployeeStateHarness()
+        state.is_editing_admin = True
+        state.form_role = "admin"
+
+        FuncionariosState.__dict__["set_form_role"].fn(state, "instrutor")
+
+        self.assertEqual(state.form_role, "admin")
+
+    async def test_active_admin_cannot_request_deactivation(self):
+        state = EmployeeStateHarness()
+        state.is_admin = True
+        state.funcionarios = [
+            {"id": 7, "role": "admin", "situacao": "Ativo"},
+        ]
+
+        FuncionariosState.__dict__["request_status_change"].fn(state, 7)
+
+        self.assertFalse(state.is_status_dialog_open)
+        self.assertIn("não podem ser desativadas", state.error_message)
+
+    async def test_inactive_admin_can_be_reactivated(self):
+        state = EmployeeStateHarness()
+        state.is_admin = True
+        state.funcionarios = [
+            {"id": 7, "role": "admin", "situacao": "Inativo"},
+        ]
+
+        FuncionariosState.__dict__["request_status_change"].fn(state, 7)
+
+        self.assertTrue(state.is_status_dialog_open)
+        self.assertTrue(state.is_reactivating)
+
     async def test_confirmed_reactivation_uses_activate_endpoint(self):
         state = EmployeeStateHarness()
         state.is_admin = True
@@ -582,6 +640,18 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('type:"email"', serialized_props)
         self.assertNotIn('type:"password"', serialized_props)
         self.assertNotIn("token", serialized_props)
+
+    def test_active_admin_row_does_not_offer_status_change(self):
+        rendered = employee_row(
+            {"id": 7, "role": "admin", "situacao": "Ativo"}
+        ).render()
+        self.assertIn("'cond_state': 'false'", str(rendered))
+
+    def test_inactive_admin_row_only_offers_reactivation(self):
+        rendered = employee_row(
+            {"id": 7, "role": "admin", "situacao": "Inativo"}
+        ).render()
+        self.assertIn("'cond_state': 'true'", str(rendered))
 
 
 if __name__ == "__main__":

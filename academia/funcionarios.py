@@ -58,6 +58,7 @@ class FuncionariosState(rx.State):
     form_error: str = ""
     is_form_open: bool = False
     is_editing: bool = False
+    is_editing_admin: bool = False
     funcionario_id: int = 0
     form_name: str = ""
     form_email: str = ""
@@ -96,6 +97,7 @@ class FuncionariosState(rx.State):
         self.success_message = ""
         self.is_form_open = False
         self.is_editing = False
+        self.is_editing_admin = False
         self._reset_form()
         self.is_status_dialog_open = False
         self.funcionario_id_to_change = 0
@@ -134,6 +136,7 @@ class FuncionariosState(rx.State):
         self.form_name = ""
         self.form_email = ""
         self.form_role = "recepcionista"
+        self.is_editing_admin = False
         self.form_error = ""
 
     def _require_admin(self) -> bool:
@@ -204,6 +207,9 @@ class FuncionariosState(rx.State):
 
     @rx.event
     def set_form_role(self, value: str):
+        if self.is_editing_admin:
+            self.form_role = "admin"
+            return
         self.form_role = value
 
     @rx.event
@@ -270,6 +276,7 @@ class FuncionariosState(rx.State):
             self.form_name = str(funcionario.get("name") or "")
             self.form_email = str(funcionario.get("email") or "")
             self.form_role = str(funcionario.get("role") or "")
+            self.is_editing_admin = self.form_role == "admin"
             self.is_editing = True
             self.is_form_open = True
         finally:
@@ -304,7 +311,7 @@ class FuncionariosState(rx.State):
             payload = {
                 "name": self.form_name.strip(),
                 "email": self.form_email.strip().lower(),
-                "role": self.form_role,
+                "role": "admin" if self.is_editing_admin else self.form_role,
             }
             try:
                 if was_editing:
@@ -363,6 +370,15 @@ class FuncionariosState(rx.State):
         )
         if funcionario is None:
             self.error_message = "Funcionário não encontrado."
+            return
+
+        if (
+            funcionario.get("role") == "admin"
+            and str(funcionario.get("situacao") or "").casefold() == "ativo"
+        ):
+            self.error_message = (
+                "Contas administrativas não podem ser desativadas."
+            )
             return
 
         status = str(funcionario.get("situacao") or "").casefold()
@@ -448,7 +464,27 @@ class FuncionariosState(rx.State):
 def employee_row(funcionario: dict) -> rx.Component:
     status = funcionario.get("situacao", "Desconhecido")
     is_active = (status == "Ativo") | (status == "ativo")
+    can_change_status = (funcionario.get("role", "") != "admin") | (
+        (status != "Ativo") & (status != "ativo")
+    )
     invite_status = funcionario.get("status_convite", "")
+    status_action = rx.button(
+        rx.icon(
+            rx.cond(
+                is_active,
+                "user-round-x",
+                "user-round-check",
+            ),
+            size=15,
+        ),
+        rx.cond(is_active, "Desativar", "Ativar"),
+        variant="soft",
+        color_scheme=rx.cond(is_active, "red", "green"),
+        on_click=FuncionariosState.request_status_change(
+            funcionario.get("id", 0)
+        ),
+        disabled=FuncionariosState.is_changing_status,
+    )
     return rx.table.row(
         rx.table.cell(
             rx.vstack(
@@ -485,23 +521,7 @@ def employee_row(funcionario: dict) -> rx.Component:
                     ),
                     disabled=FuncionariosState.is_loading_details,
                 ),
-                rx.button(
-                    rx.icon(
-                        rx.cond(
-                            is_active,
-                            "user-round-x",
-                            "user-round-check",
-                        ),
-                        size=15,
-                    ),
-                    rx.cond(is_active, "Desativar", "Ativar"),
-                    variant="soft",
-                    color_scheme=rx.cond(is_active, "red", "green"),
-                    on_click=FuncionariosState.request_status_change(
-                        funcionario.get("id", 0)
-                    ),
-                    disabled=FuncionariosState.is_changing_status,
-                ),
+                rx.cond(can_change_status, status_action),
                 spacing="2",
                 flex_wrap="wrap",
             )
@@ -581,7 +601,10 @@ def employee_form_dialog() -> rx.Component:
                         ),
                         value=FuncionariosState.form_role,
                         on_change=FuncionariosState.set_form_role,
-                        disabled=FuncionariosState.is_saving,
+                        disabled=(
+                            FuncionariosState.is_saving
+                            | FuncionariosState.is_editing_admin
+                        ),
                     ),
                     spacing="1",
                     width="100%",

@@ -38,6 +38,12 @@ query "funcionarios/atualizar/{funcionario_id}" verb=PUT {
           role: "instrutor"
           situacao: "Ativo"
         }
+        "updates administrator operational fields": {
+          id: 2147483647
+          email: "admin-old@example.test"
+          role: "admin"
+          situacao: "Ativo"
+        }
         "rejects administrator role change": {
           id: 2147483647
           email: "admin@example.test"
@@ -75,6 +81,7 @@ query "funcionarios/atualizar/{funcionario_id}" verb=PUT {
       output = ["id"]
       mock = {
         "updates operational employee fields": null
+        "updates administrator operational fields": null
         "rejects administrator role change": null
         "rejects duplicate email": {id: 2147483648}
       }
@@ -99,6 +106,14 @@ query "funcionarios/atualizar/{funcionario_id}" verb=PUT {
           name: "Ana Exemplo"
           email: "ana@example.test"
           role: "instrutor"
+          situacao: "Ativo"
+          password: "synthetic-hash"
+        }
+        "updates administrator operational fields": {
+          id: 2147483647
+          name: "Admin Exemplo"
+          email: "admin@example.test"
+          role: "admin"
           situacao: "Ativo"
           password: "synthetic-hash"
         }
@@ -152,6 +167,24 @@ query "funcionarios/atualizar/{funcionario_id}" verb=PUT {
       role: "instrutor"
     }
     expect.to_throw
+  }
+
+  test "updates administrator operational fields without changing role" {
+    input = {
+      funcionario_id: 2147483647
+      name: "Admin Exemplo"
+      email: "admin@example.test"
+      role: "admin"
+    }
+    expect.to_equal ($response) {
+      value = {
+        id: 2147483647
+        name: "Admin Exemplo"
+        email: "admin@example.test"
+        role: "admin"
+        situacao: "Ativo"
+      }
+    }
   }
 
   test "rejects duplicate email" {

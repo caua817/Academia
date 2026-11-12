@@ -11,7 +11,7 @@
 - [ ] 2.1 Implementar listagem e detalhes de funcionários nos caminhos já usados pelo cliente, retornando somente campos operacionais e exigindo `admin`; validar respostas, rejeição de acesso e ausência de credenciais.
 - [ ] 2.2 Implementar convite e edição de funcionários com validação de nome, e-mail e perfil; enviar link individual de definição de senha, permitir reenvio de convite pendente, rejeitar duplicidade concluída e impedir rebaixamento de contas `admin`; validar erros e resposta sem segredos.
 - [ ] 2.3 Implementar ativação e desativação sem exclusão física para contas não administrativas, rejeitando a desativação de qualquer conta `admin` e permitindo reativar contas administrativas legadas; validar situações retornadas e histórico preservado.
-- [ ] 2.4 Ajustar a tela Reflex para manter o perfil `admin` fixo na edição e não oferecer desativação para contas administrativas; verificar também os fluxos de funcionários não administrativos.
+- [x] 2.4 Ajustar a tela Reflex para manter o perfil `admin` fixo na edição e não oferecer desativação para contas administrativas; verificar também os fluxos de funcionários não administrativos.
 
 ## 3. Cliente autenticado
 
@@ -19,5 +19,5 @@
 
 ## 4. Verificação e sincronização
 
-- [ ] 4.1 Executar testes direcionados do cliente, validação XanoScript dos arquivos alterados, `openspec validate --all` e `reflex compile --dry`; registrar os resultados sem criar dados reais.
-- [ ] 4.2 Revisar `git diff` e executar `xano workspace push --dry-run` limitado aos arquivos desta change; confirmar que nenhuma publicação real foi feita sem aprovação explícita.
+- [x] 4.1 Executar testes direcionados do cliente, validação XanoScript dos arquivos alterados, `openspec validate --all` e `reflex compile --dry`; registrar os resultados sem criar dados reais.
+- [x] 4.2 Revisar `git diff` e executar `xano workspace push --dry-run` limitado aos arquivos desta change; confirmar que nenhuma publicação real foi feita sem aprovação explícita.
