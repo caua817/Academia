@@ -82,4 +82,5 @@ query "funcionarios/ativar/{funcionario_id}" verb=PATCH {
     input = {funcionario_id: 2147483647}
     expect.to_throw
   }
+  guid = "CoeVYJ5lu0X2-xebrRRGL340Uxo"
 }

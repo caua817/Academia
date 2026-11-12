@@ -3,7 +3,7 @@
 ## 1. Contas e autorização
 
 - [x] 1.1 Estender a tabela `user` com os papéis de funcionário e situação ativa, preservando `member` e contas existentes; validar a definição XanoScript e compatibilidade do schema.
-- [ ] 1.2 Rejeitar contas inativas no login, autenticação por link, identidade e autorização de operações protegidas; validar os cenários ativo/inativo com testes Xano isolados e `xano_validate_xanoscript`.
+- [x] 1.2 Rejeitar contas inativas no login, autenticação por link, identidade e autorização de operações protegidas; validar os cenários ativo/inativo com testes Xano isolados e `xano_validate_xanoscript`.
 - [ ] 1.3 Impedir a desativação ou o rebaixamento de qualquer conta `admin`, sem depender de transação serializável; validar que as operações são rejeitadas e não alteram a conta.
 
 ## 2. API de funcionários

@@ -80,4 +80,5 @@ query "funcionarios/detalhes/{funcionario_id}" verb=GET {
     input = {funcionario_id: 2147483647}
     expect.to_throw
   }
+  guid = "UNCbQ5N9VKahjmLQGYOsfJkICIk"
 }

@@ -206,4 +206,5 @@ query "funcionarios/atualizar/{funcionario_id}" verb=PUT {
     }
     expect.to_throw
   }
+  guid = "FxZ6Q2AYqq3RN0Tl22RLFfWR5q4"
 }

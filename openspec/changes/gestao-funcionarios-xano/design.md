@@ -58,7 +58,7 @@ Alternativa descartada: manter o placeholder atual, que impede qualquer chamada 
 - **[Risco]** Contas existentes não têm a nova situação preenchida. → **Mitigação:** interpretar valor ausente como ativo e não alterar os papéis legados.
 - **[Risco]** Tokens de usuários desativados continuam criptograficamente válidos até expirarem. → **Mitigação:** conferir a situação atual na identidade e na autorização compartilhada a cada solicitação protegida.
 - **[Trade-off]** Nenhuma conta `admin` poderá ser desligada pela aplicação, mesmo quando houver outros administradores. → **Mitigação:** ocultar a ação na interface e exigir processo administrativo externo para esses casos.
-- **[Risco]** O workspace publicado não contém os endpoints e não há uma sessão administrativa disponível para leitura autenticada. → **Mitigação:** validar os arquivos localmente e usar apenas `xano workspace push --dry-run`; publicação e teste no runtime aguardam aprovação explícita.
+- **[Risco]** Os testes Xano das APIs protegidas exigem contexto de autenticação de usuário da aplicação, que o executor CLI não fornece. → **Mitigação:** os testes unitários isolados da regra compartilhada de conta ativa foram executados; os endpoints foram publicados na branch `v1` após aprovação do grupo, sem importar registros. Os testes das APIs protegidas devem ser executados por um fluxo autenticado antes de considerar a verificação de runtime completa.
 
 ## Migration Plan
 

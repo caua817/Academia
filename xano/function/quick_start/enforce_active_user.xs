@@ -12,7 +12,10 @@ function "Quick Start/enforce_active_user" {
       mock = {
         "rejects inactive account": {id: 2147483647, situacao: "Inativo"}
         "allows active account": {id: 2147483647, situacao: "Ativo"}
-        "allows legacy account without status": {id: 2147483647}
+        "allows legacy account without status": {
+          id: 2147483647
+          situacao: null
+        }
       }
     } as $user
 
@@ -43,4 +46,5 @@ function "Quick Start/enforce_active_user" {
     input = {user_id: 2147483647}
     expect.to_equal ($response) {value = null}
   }
+  guid = "j97HKnQdplwskRdLP6Hth-KWOAc"
 }

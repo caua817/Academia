@@ -100,4 +100,5 @@ query "funcionarios/desativar/{funcionario_id}" verb=PATCH {
     input = {funcionario_id: 2147483647}
     expect.to_throw
   }
+  guid = "4d6LQSAq0ie08jkTw3AmpJDY3-k"
 }

@@ -105,4 +105,5 @@ query "funcionarios/convites" verb=POST {
     situacao: "Ativo"
     status_convite: "Enviado"
   }
+  guid = "BJwBnkpjH8K93u0iVTniy6CftUg"
 }
