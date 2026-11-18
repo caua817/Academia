@@ -8,7 +8,6 @@ from academia.login import LoginState
 from academia.operacao import (
     OperacaoState,
     active_instructor_options,
-    active_student_options,
     combine_session_datetime,
     to_api_timestamp,
     validate_date_range,
@@ -34,22 +33,6 @@ class OperationValidationTests(unittest.TestCase):
     def test_modality_requires_a_name(self):
         self.assertIsNotNone(validate_modalidade_fields("  "))
         self.assertIsNone(validate_modalidade_fields(" Yoga "))
-
-    def test_reservation_student_options_are_active_and_minimal(self):
-        options = active_student_options(
-            [
-                {
-                    "id": 3,
-                    "nome": "Ana",
-                    "situacao": "Ativo",
-                    "cpf": "sensitive",
-                    "contato": "sensitive",
-                },
-                {"id": 4, "nome": "Bia", "situacao": "Inativo"},
-            ]
-        )
-        self.assertEqual(options, [{"id": "3", "label": "Ana"}])
-        self.assertNotIn("cpf", options[0])
 
     def test_instructor_options_only_include_active_named_instructors(self):
         options = active_instructor_options(
@@ -184,9 +167,6 @@ class _OperationStateHarness(_AccessHarness):
         self.modalidade_options = []
         self.sessoes = []
         self.sessao_options = []
-        self.reservas = []
-        self.aluno_options = []
-        self.resumo_reservas = {}
         self.relatorio = {}
         self.report_metrics = []
         self.selected_sessao = {}
@@ -434,6 +414,33 @@ class OperationScreenStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Selecione um instrutor", rendered)
         self.assertNotIn("ID do instrutor", rendered)
         self.assertNotIn('type:"datetime-local"', rendered)
+        self.assertNotIn("Ocupação:", rendered)
+        self.assertNotIn("Reservas", rendered)
+
+    def test_removed_reservation_route_is_not_registered_or_linked(self):
+        from academia.academia import app, sidebar
+
+        self.assertNotIn("/reservas", app._pages)
+        self.assertNotIn("/reservas", str(sidebar("dashboard")))
+
+    def test_report_metrics_exclude_reservations_and_occupancy(self):
+        state = _OperationStateHarness()
+        state.relatorio = {
+            "matriculas_ativas": 2,
+            "pagamentos_quantidade": 1,
+            "pagamentos_valor": 50,
+            "mensalidades_atrasadas_quantidade": 0,
+            "mensalidades_atrasadas_valor": 0,
+            "checkins_quantidade": 4,
+            "sessoes_quantidade": 2,
+            "capacidade_total": 20,
+        }
+        OperacaoState._prepare_report_metrics(state)
+        labels = {metric["label"] for metric in state.report_metrics}
+        self.assertIn("Sessões", labels)
+        self.assertIn("Capacidade total", labels)
+        self.assertNotIn("Ocupação", labels)
+        self.assertNotIn("Reservas não canceladas", labels)
 
 
 if __name__ == "__main__":

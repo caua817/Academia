@@ -20,7 +20,6 @@ from academia.operacao import (
     OperacaoState,
     modalidades_page,
     relatorios_page,
-    reservas_page,
     sessoes_page,
 )
 from academia.planos import PlanosState, planos_page
@@ -218,12 +217,6 @@ def sidebar(active_page: str) -> rx.Component:
             "calendar-days",
             "/sessoes",
             active_page == "sessoes",
-        ),
-        nav_link(
-            "Reservas",
-            "ticket-check",
-            "/reservas",
-            active_page == "reservas",
         ),
         nav_link(
             "Relatórios",
@@ -603,7 +596,6 @@ def app_shell(
         "funcionarios": FuncionariosState.load_funcionarios,
         "modalidades": OperacaoState.load_modalidades,
         "sessoes": OperacaoState.load_sessoes,
-        "reservas": OperacaoState.load_reservas_page,
         "relatorios": OperacaoState.load_relatorios,
     }[active_page]
     is_loading = {
@@ -616,7 +608,6 @@ def app_shell(
         "funcionarios": FuncionariosState.is_loading,
         "modalidades": OperacaoState.is_loading,
         "sessoes": OperacaoState.is_loading,
-        "reservas": OperacaoState.is_loading,
         "relatorios": OperacaoState.is_loading,
     }[active_page]
     is_authorized = AdminAccessState.authorized_route == active_page
@@ -720,7 +711,6 @@ app.add_page(checkins_page, route="/checkins")
 app.add_page(funcionarios_page, route="/funcionarios")
 app.add_page(modalidades_page, route="/modalidades")
 app.add_page(sessoes_page, route="/sessoes")
-app.add_page(reservas_page, route="/reservas")
 app.add_page(relatorios_page, route="/relatorios")
 app.add_page(login_page, route="/login")
 app.add_page(

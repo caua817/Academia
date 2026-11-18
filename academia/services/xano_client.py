@@ -659,7 +659,7 @@ class XanoClient:
             token,
             params={"data_inicio": data_inicio, "data_fim": data_fim},
         )
-        return XanoClient._expect_records(
+        sessions = XanoClient._expect_records(
             data,
             "sessões",
             (
@@ -675,6 +675,14 @@ class XanoClient:
                 "situacao",
             ),
         )
+        return [
+            {
+                key: value
+                for key, value in session.items()
+                if key not in {"ocupacao", "percentual_ocupacao"}
+            }
+            for session in sessions
+        ]
 
     @staticmethod
     def create_sessao(token: str, payload: JsonPayload) -> dict:
@@ -757,123 +765,6 @@ class XanoClient:
         )
 
     @staticmethod
-    def get_reservas(token: str, sessao_id: int) -> dict:
-        data = XanoClient._request(
-            "GET",
-            f"/reservas/{sessao_id}",
-            token,
-        )
-        result = XanoClient._expect_record(
-            data,
-            "reservas",
-            (
-                "sessao_aula_id",
-                "capacidade",
-                "ocupacao",
-                "vagas_disponiveis",
-                "reservas",
-            ),
-        )
-        expected_summary_fields = {
-            "sessao_aula_id",
-            "capacidade",
-            "ocupacao",
-            "vagas_disponiveis",
-            "reservas",
-        }
-        if set(result) != expected_summary_fields:
-            raise XanoAPIError(
-                "A API retornou campos inesperados na consulta de reservas."
-            )
-        reservations = XanoClient._expect_records(
-            result["reservas"],
-            "reservas",
-            (
-                "id",
-                "sessao_aula_id",
-                "aluno_id",
-                "aluno_nome",
-                "situacao",
-                "reservado_em",
-            ),
-        )
-        expected_reservation_fields = {
-            "id",
-            "sessao_aula_id",
-            "aluno_id",
-            "aluno_nome",
-            "situacao",
-            "reservado_em",
-        }
-        if any(
-            set(reservation) != expected_reservation_fields
-            for reservation in reservations
-        ):
-            raise XanoAPIError(
-                "A API retornou campos inesperados na lista de reservas."
-            )
-        result["reservas"] = reservations
-        return result
-
-    @staticmethod
-    def create_reserva(token: str, payload: JsonPayload) -> dict:
-        XanoClient._validate_payload_fields(
-            payload,
-            {"sessao_aula_id", "aluno_id"},
-            "reserva",
-        )
-        data = XanoClient._request("POST", "/reservas", token, payload)
-        return XanoClient._expect_record(
-            data,
-            "reservas",
-            (
-                "id",
-                "sessao_aula_id",
-                "aluno_id",
-                "situacao",
-                "reservado_em",
-            ),
-        )
-
-    @staticmethod
-    def cancel_reserva(token: str, reserva_id: int) -> dict:
-        data = XanoClient._request(
-            "PATCH",
-            f"/reservas/cancelar/{reserva_id}",
-            token,
-        )
-        return XanoClient._expect_record(
-            data,
-            "reservas",
-            ("id", "sessao_aula_id", "aluno_id", "situacao"),
-        )
-
-    @staticmethod
-    def set_reserva_resultado(
-        token: str,
-        reserva_id: int,
-        resultado: str,
-    ) -> dict:
-        XanoClient._validate_payload_fields(
-            {"resultado": resultado},
-            {"resultado"},
-            "resultado de reserva",
-        )
-        if resultado not in {"Presente", "Falta"}:
-            raise XanoAPIError("O resultado da reserva é inválido.")
-        data = XanoClient._request(
-            "PATCH",
-            f"/reservas/resultado/{reserva_id}",
-            token,
-            {"resultado": resultado},
-        )
-        return XanoClient._expect_record(
-            data,
-            "reservas",
-            ("id", "sessao_aula_id", "aluno_id", "situacao"),
-        )
-
-    @staticmethod
     def get_relatorio_operacao(
         token: str,
         data_inicio: str,
@@ -929,4 +820,8 @@ class XanoClient:
             raise XanoAPIError(
                 "A API retornou métricas inválidas no relatório."
             )
-        return report
+        return {
+            key: value
+            for key, value in report.items()
+            if key not in {"reservas_nao_canceladas", "ocupacao_percentual"}
+        }

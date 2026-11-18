@@ -17,7 +17,6 @@ ROLE_ROUTE_ACCESS = {
             "funcionarios",
             "modalidades",
             "sessoes",
-            "reservas",
             "relatorios",
         }
     ),

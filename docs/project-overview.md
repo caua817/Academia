@@ -47,7 +47,7 @@ O objetivo do grupo é entregar a gestão completa da academia, com todas as fas
 - Check-in / controle de frequência.
 
 **Fase 2 — Operação**
-- Modalidades, aulas e reservas.
+- Modalidades e sessões de aula.
 - Cadastro de instrutores e funcionários.
 - Relatórios gerenciais.
 
@@ -69,7 +69,9 @@ O objetivo do grupo é entregar a gestão completa da academia, com todas as fas
 - Registro de pagamentos e situação financeira do aluno.
 - Registro de frequência.
 - Controle de acesso por perfil.
-- (Fases posteriores) agenda de aulas, reservas, treinos e avaliações físicas.
+- (Fases posteriores) agenda de aulas, treinos e avaliações físicas.
+
+> A interface atual não oferece gestão de reservas de aulas. Os endpoints e registros históricos de reservas existentes no Xano são preservados; esta decisão não os desativa nem os exclui.
 
 ## 7. Requisitos e restrições importantes
 

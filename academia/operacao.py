@@ -26,17 +26,6 @@ def validate_modalidade_fields(nome: str) -> str | None:
     return None
 
 
-def active_student_options(alunos: list[dict]) -> list[dict[str, str]]:
-    return [
-        {
-            "id": str(aluno.get("id", "")),
-            "label": str(aluno.get("nome") or "Aluno sem nome"),
-        }
-        for aluno in alunos
-        if str(aluno.get("situacao", "")).casefold() == "ativo"
-    ]
-
-
 def active_instructor_options(funcionarios: list[dict]) -> list[dict[str, str]]:
     options = []
     for funcionario in funcionarios:
@@ -129,9 +118,6 @@ class OperacaoState(rx.State):
     modalidade_options: list[dict[str, str]] = []
     sessoes: list[dict] = []
     sessao_options: list[dict[str, str]] = []
-    reservas: list[dict] = []
-    aluno_options: list[dict[str, str]] = []
-    resumo_reservas: dict = {}
     relatorio: dict = {}
     report_metrics: list[dict[str, str]] = []
     selected_sessao: dict = {}
@@ -161,8 +147,6 @@ class OperacaoState(rx.State):
     sessao_local: str = ""
     sessao_editing: bool = False
 
-    reserva_aluno_id: str = ""
-
     @rx.var
     def has_modalidades(self) -> bool:
         return bool(self.modalidades)
@@ -174,10 +158,6 @@ class OperacaoState(rx.State):
     @rx.var
     def has_active_instructors(self) -> bool:
         return bool(self.instrutor_options)
-
-    @rx.var
-    def has_reservas(self) -> bool:
-        return bool(self.reservas)
 
     @rx.var
     def has_report(self) -> bool:
@@ -196,8 +176,6 @@ class OperacaoState(rx.State):
                 "checkins_quantidade",
                 "sessoes_quantidade",
                 "capacidade_total",
-                "reservas_nao_canceladas",
-                "ocupacao_percentual",
             )
         )
 
@@ -206,9 +184,6 @@ class OperacaoState(rx.State):
         self.modalidade_options = []
         self.sessoes = []
         self.sessao_options = []
-        self.reservas = []
-        self.aluno_options = []
-        self.resumo_reservas = {}
         self.relatorio = {}
         self.report_metrics = []
         self.selected_sessao = {}
@@ -222,7 +197,6 @@ class OperacaoState(rx.State):
         self.form_error = ""
         self._reset_modalidade_form()
         self._reset_sessao_form()
-        self.reserva_aluno_id = ""
 
     def _reset_modalidade_form(self) -> None:
         self.modalidade_id = 0
@@ -324,8 +298,6 @@ class OperacaoState(rx.State):
             ("Check-ins", "checkins_quantidade", False),
             ("Sessões", "sessoes_quantidade", False),
             ("Capacidade total", "capacidade_total", False),
-            ("Reservas não canceladas", "reservas_nao_canceladas", False),
-            ("Ocupação", "ocupacao_percentual", False),
         )
         self.report_metrics = []
         for label, key, currency in metric_labels:
@@ -333,8 +305,6 @@ class OperacaoState(rx.State):
             formatted = f"{value:.2f}" if currency else f"{value:g}"
             if currency:
                 formatted = f"R$ {formatted.replace('.', ',')}"
-            elif key == "ocupacao_percentual":
-                formatted = f"{formatted}%"
             self.report_metrics.append({"label": label, "value": formatted})
 
     @rx.event
@@ -664,244 +634,6 @@ class OperacaoState(rx.State):
         finally:
             self.is_changing_status = False
 
-    async def _load_reservas_summary(self, token: str, sessao_id: int) -> None:
-        self.resumo_reservas = XanoClient.get_reservas(token, sessao_id)
-        self.reservas = self.resumo_reservas["reservas"]
-        self.selected_sessao = next(
-            (
-                session
-                for session in self.sessoes
-                if int(session.get("id", 0)) == sessao_id
-            ),
-            {},
-        )
-        self.selected_sessao = dict(self.selected_sessao)
-        start, end = _session_times(self.selected_sessao)
-        now = datetime.now(timezone.utc)
-        session_is_scheduled = (
-            self.selected_sessao.get("situacao") == "Agendada"
-        )
-        available_spaces = int(
-            self.resumo_reservas.get("vagas_disponiveis", 0) or 0
-        )
-        self.selected_sessao["can_reserve"] = bool(
-            session_is_scheduled and start is not None and start > now
-            and available_spaces > 0
-        )
-        for reservation in self.reservas:
-            reservation["can_cancel"] = bool(
-                session_is_scheduled
-                and reservation.get("situacao") == "Confirmada"
-                and start is not None
-                and start > now
-            )
-            reservation["can_set_result"] = bool(
-                session_is_scheduled
-                and reservation.get("situacao") == "Confirmada"
-                and end is not None
-                and end <= now
-            )
-
-    @rx.event
-    async def load_reservas_page(self):
-        await begin_admin_check(self)
-        self.is_loading = True
-        self.error_message = ""
-        self.success_message = ""
-        yield
-        token, should_redirect = await self._admin_token("reservas")
-        if not token:
-            self.sessoes = []
-            self.reservas = []
-            self.resumo_reservas = {}
-            self.is_loading = False
-            if should_redirect:
-                yield rx.redirect("/login")
-            return
-        error = validate_date_range(*self._date_filters())
-        if error:
-            self.error_message = error
-            self.is_loading = False
-            return
-        try:
-            start, end = self._date_filters()
-            self.modalidades = XanoClient.get_modalidades(token)
-            self._prepare_modality_options()
-            self.sessoes = XanoClient.get_sessoes(token, start, end)
-            self.aluno_options = active_student_options(
-                XanoClient.get_alunos(token)
-            )
-            self._prepare_sessions()
-            available_ids = [
-                str(session["id"])
-                for session in self.sessoes
-            ]
-            if self.selected_sessao_id not in available_ids:
-                self.selected_sessao_id = available_ids[0] if available_ids else ""
-            if self.selected_sessao_id:
-                await self._load_reservas_summary(
-                    token,
-                    int(self.selected_sessao_id),
-                )
-            else:
-                self.reservas = []
-                self.resumo_reservas = {}
-                self.selected_sessao = {}
-        except XanoAPIError as error:
-            self.sessoes = []
-            self.aluno_options = []
-            self.reservas = []
-            self.resumo_reservas = {}
-            self.error_message = self._api_error_message(
-                error,
-                "carregar reservas",
-            )
-            if await self._redirect_if_expired(error):
-                yield rx.redirect("/login")
-        finally:
-            self.is_loading = False
-
-    @rx.event
-    async def select_sessao(self, value: str):
-        self.selected_sessao_id = value
-        self.error_message = ""
-        self.success_message = ""
-        if not value:
-            self.selected_sessao = {}
-            self.reservas = []
-            self.resumo_reservas = {}
-            return
-        token, should_redirect = await self._admin_token("reservas")
-        if not token:
-            if should_redirect:
-                yield rx.redirect("/login")
-            return
-        self.is_loading = True
-        yield
-        try:
-            await self._load_reservas_summary(token, int(value))
-        except XanoAPIError as error:
-            self.reservas = []
-            self.resumo_reservas = {}
-            self.error_message = self._api_error_message(
-                error,
-                "carregar reservas",
-            )
-            if await self._redirect_if_expired(error):
-                yield rx.redirect("/login")
-        finally:
-            self.is_loading = False
-
-    @rx.event
-    def set_reserva_aluno_id(self, value: str):
-        self.reserva_aluno_id = value
-
-    @rx.event
-    async def create_reserva(self):
-        try:
-            aluno_id = int(self.reserva_aluno_id)
-        except ValueError:
-            self.form_error = "Informe um identificador válido de aluno."
-            return
-        if aluno_id <= 0 or not self.selected_sessao_id:
-            self.form_error = "Selecione uma sessão e informe o aluno."
-            return
-        if not self.selected_sessao.get("can_reserve", False):
-            self.form_error = "A sessão não está disponível para novas reservas."
-            return
-        token, should_redirect = await self._admin_token("reservas")
-        if not token:
-            if should_redirect:
-                yield rx.redirect("/login")
-            return
-        self.form_error = ""
-        self.error_message = ""
-        self.success_message = ""
-        self.is_saving = True
-        yield
-        try:
-            XanoClient.create_reserva(
-                token,
-                {
-                    "sessao_aula_id": int(self.selected_sessao_id),
-                    "aluno_id": aluno_id,
-                },
-            )
-            await self._load_reservas_summary(
-                token,
-                int(self.selected_sessao_id),
-            )
-            self.reserva_aluno_id = ""
-            self.success_message = "Reserva confirmada com sucesso."
-        except XanoAPIError as error:
-            self.error_message = self._api_error_message(
-                error,
-                "criar a reserva",
-            )
-            if await self._redirect_if_expired(error):
-                yield rx.redirect("/login")
-        finally:
-            self.is_saving = False
-
-    @rx.event
-    async def cancel_reserva(self, reserva_id: int):
-        token, should_redirect = await self._admin_token("reservas")
-        if not token:
-            if should_redirect:
-                yield rx.redirect("/login")
-            return
-        self.is_changing_status = True
-        self.error_message = ""
-        self.success_message = ""
-        yield
-        try:
-            XanoClient.cancel_reserva(token, reserva_id)
-            await self._load_reservas_summary(
-                token,
-                int(self.selected_sessao_id),
-            )
-            self.success_message = "Reserva cancelada; a vaga foi liberada."
-        except XanoAPIError as error:
-            self.error_message = self._api_error_message(
-                error,
-                "cancelar a reserva",
-            )
-            if await self._redirect_if_expired(error):
-                yield rx.redirect("/login")
-        finally:
-            self.is_changing_status = False
-
-    @rx.event
-    async def set_reserva_resultado(self, reserva_id: int, resultado: str):
-        if resultado not in {"Presente", "Falta"}:
-            self.error_message = "Selecione um resultado válido."
-            return
-        token, should_redirect = await self._admin_token("reservas")
-        if not token:
-            if should_redirect:
-                yield rx.redirect("/login")
-            return
-        self.is_changing_status = True
-        self.error_message = ""
-        self.success_message = ""
-        yield
-        try:
-            XanoClient.set_reserva_resultado(token, reserva_id, resultado)
-            await self._load_reservas_summary(
-                token,
-                int(self.selected_sessao_id),
-            )
-            self.success_message = "Resultado da reserva registrado."
-        except XanoAPIError as error:
-            self.error_message = self._api_error_message(
-                error,
-                "registrar presença ou falta",
-            )
-            if await self._redirect_if_expired(error):
-                yield rx.redirect("/login")
-        finally:
-            self.is_changing_status = False
-
     @rx.event
     async def load_relatorios(self):
         await begin_admin_check(self)
@@ -1177,9 +909,7 @@ def _session_row(session: dict) -> rx.Component:
                 f"Término: {session.get('termino', '—')}"
             ),
             rx.text(
-                f"Ocupação: {session.get('ocupacao', 0)} / "
-                f"{session.get('capacidade', 0)} "
-                f"({session.get('percentual_ocupacao', 0)}%)"
+                f"Capacidade: {session.get('capacidade', 0)} vagas"
             ),
             rx.hstack(
                 rx.text("Local:"),
@@ -1415,202 +1145,6 @@ def sessoes_content() -> rx.Component:
     )
 
 
-def _reservation_row(reservation: dict) -> rx.Component:
-    return rx.table.row(
-        rx.table.cell(reservation.get("aluno_nome", "Aluno")),
-        rx.table.cell(reservation.get("situacao", "—")),
-        rx.table.cell(reservation.get("reservado_em", "—")),
-        rx.table.cell(
-            rx.hstack(
-                rx.cond(
-                    reservation.get("can_cancel", False),
-                    rx.button(
-                        "Cancelar",
-                        size="1",
-                        color_scheme="red",
-                        variant="soft",
-                        loading=OperacaoState.is_changing_status,
-                        on_click=OperacaoState.cancel_reserva(
-                            reservation.get("id")
-                        ),
-                    ),
-                ),
-                rx.cond(
-                    reservation.get("can_set_result", False),
-                    rx.button(
-                        "Presente",
-                        size="1",
-                        color_scheme="green",
-                        variant="soft",
-                        loading=OperacaoState.is_changing_status,
-                        on_click=OperacaoState.set_reserva_resultado(
-                            reservation.get("id"),
-                            "Presente",
-                        ),
-                    ),
-                ),
-                rx.cond(
-                    reservation.get("can_set_result", False),
-                    rx.button(
-                        "Falta",
-                        size="1",
-                        color_scheme="amber",
-                        variant="soft",
-                        loading=OperacaoState.is_changing_status,
-                        on_click=OperacaoState.set_reserva_resultado(
-                            reservation.get("id"),
-                            "Falta",
-                        ),
-                    ),
-                ),
-                spacing="2",
-                flex_wrap="wrap",
-            )
-        ),
-    )
-
-
-def _reservations_table() -> rx.Component:
-    return rx.box(
-        rx.table.root(
-            rx.table.header(
-                rx.table.row(
-                    rx.table.column_header_cell("ALUNO"),
-                    rx.table.column_header_cell("SITUAÇÃO"),
-                    rx.table.column_header_cell("RESERVADO EM"),
-                    rx.table.column_header_cell("AÇÕES"),
-                )
-            ),
-            rx.table.body(rx.foreach(OperacaoState.reservas, _reservation_row)),
-            width="100%",
-            variant="surface",
-        ),
-        overflow_x="auto",
-        width="100%",
-    )
-
-
-def reservas_content() -> rx.Component:
-    return rx.vstack(
-        _message_area(),
-        rx.card(
-            rx.vstack(
-                rx.heading("Reservas por sessão", size="4"),
-                rx.hstack(
-                    rx.input(
-                        type="date",
-                        value=OperacaoState.data_inicio,
-                        on_change=OperacaoState.set_data_inicio,
-                    ),
-                    rx.input(
-                        type="date",
-                        value=OperacaoState.data_fim,
-                        on_change=OperacaoState.set_data_fim,
-                    ),
-                    rx.button(
-                        "Atualizar sessões",
-                        on_click=OperacaoState.load_reservas_page,
-                        loading=OperacaoState.is_loading,
-                    ),
-                    flex_wrap="wrap",
-                    width="100%",
-                ),
-                rx.select.root(
-                    rx.select.trigger(placeholder="Selecione uma sessão"),
-                    rx.select.content(
-                        rx.foreach(
-                            OperacaoState.sessao_options,
-                            lambda session: rx.select.item(
-                                session.get("label", "Sessão"),
-                                value=session.get("id", ""),
-                            ),
-                        )
-                    ),
-                    value=OperacaoState.selected_sessao_id,
-                    on_change=OperacaoState.select_sessao,
-                    width="100%",
-                ),
-                rx.cond(
-                    OperacaoState.selected_sessao_id != "",
-                    rx.vstack(
-                        rx.text(
-                            "Ocupação: "
-                            f"{OperacaoState.resumo_reservas.get('ocupacao', 0)} / "
-                            f"{OperacaoState.resumo_reservas.get('capacidade', 0)} · "
-                            f"Vagas disponíveis: "
-                            f"{OperacaoState.resumo_reservas.get('vagas_disponiveis', 0)}"
-                        ),
-                        rx.cond(
-                            OperacaoState.selected_sessao.get(
-                                "can_reserve",
-                                False,
-                            ),
-                            rx.hstack(
-                            rx.select.root(
-                                rx.select.trigger(
-                                    placeholder="Selecione um aluno ativo"
-                                ),
-                                rx.select.content(
-                                    rx.foreach(
-                                        OperacaoState.aluno_options,
-                                        lambda student: rx.select.item(
-                                            student.get("label", "Aluno"),
-                                            value=student.get("id", ""),
-                                        ),
-                                    )
-                                ),
-                                value=OperacaoState.reserva_aluno_id,
-                                on_change=OperacaoState.set_reserva_aluno_id,
-                                width="100%",
-                            ),
-                            rx.button(
-                                "Reservar vaga",
-                                loading=OperacaoState.is_saving,
-                                on_click=OperacaoState.create_reserva,
-                            ),
-                            width="100%",
-                            flex_wrap="wrap",
-                            ),
-                            rx.text(
-                                "Esta sessão não aceita novas reservas.",
-                                color="var(--gray-9)",
-                            ),
-                        ),
-                        rx.cond(
-                            OperacaoState.form_error != "",
-                            rx.callout(
-                                OperacaoState.form_error,
-                                color_scheme="red",
-                                role="alert",
-                            ),
-                        ),
-                        _loading_or_empty(
-                            "Carregando reservas...",
-                            OperacaoState.has_reservas,
-                            _reservations_table(),
-                            "Nenhuma reserva para esta sessão.",
-                        ),
-                        align="stretch",
-                        spacing="4",
-                        width="100%",
-                    ),
-                    rx.text(
-                        "Selecione uma sessão para consultar o histórico e a ocupação.",
-                        color="var(--gray-9)",
-                    ),
-                ),
-                align="stretch",
-                spacing="4",
-                width="100%",
-            ),
-            width="100%",
-            background="#15171d",
-        ),
-        spacing="5",
-        width="100%",
-    )
-
-
 def _report_metric(metric: dict) -> rx.Component:
     return rx.card(
         rx.vstack(
@@ -1736,17 +1270,6 @@ def sessoes_page() -> rx.Component:
         "Agenda de aulas",
         "Organize sessões, instrutores, horários e capacidade.",
         sessoes_content(),
-    )
-
-
-def reservas_page() -> rx.Component:
-    from academia.academia import app_shell
-
-    return app_shell(
-        "reservas",
-        "Gestão de reservas",
-        "Acompanhe ocupação, cancelamentos e comparecimento.",
-        reservas_content(),
     )
 
 

@@ -95,17 +95,6 @@ class OperationClientTests(unittest.TestCase):
         }
         calls = [
             (
-                lambda: XanoClient.get_sessoes(
-                    "token",
-                    "2026-12-01",
-                    "2026-12-31",
-                ),
-                [session],
-                "GET",
-                "/sessoes",
-                None,
-            ),
-            (
                 lambda: XanoClient.create_sessao("token", payload),
                 write_response,
                 "POST",
@@ -129,6 +118,20 @@ class OperationClientTests(unittest.TestCase):
         ]
         self._assert_calls(calls)
 
+        result, requests = self.invoke(
+            lambda: XanoClient.get_sessoes(
+                "token",
+                "2026-12-01",
+                "2026-12-31",
+            ),
+            [session],
+        )
+        self.assertEqual(len(result), 1)
+        self.assertNotIn("ocupacao", result[0])
+        self.assertEqual(result[0]["capacidade"], 12)
+        self.assertEqual(requests[0].method, "GET")
+        self.assertEqual(requests[0].url.path, f"{API_PREFIX}/sessoes")
+
         _, requests = self.invoke(
             lambda: XanoClient.get_sessoes(
                 "token",
@@ -142,62 +145,15 @@ class OperationClientTests(unittest.TestCase):
             {"data_inicio": "2026-12-01", "data_fim": "2026-12-31"},
         )
 
-    def test_reservation_routes_and_nested_response(self):
-        summary = {
-            "sessao_aula_id": 4,
-            "capacidade": 12,
-            "ocupacao": 2,
-            "vagas_disponiveis": 10,
-            "reservas": [
-                {
-                    "id": 10,
-                    "sessao_aula_id": 4,
-                    "aluno_id": 5,
-                    "aluno_nome": "Aluno",
-                    "situacao": "Confirmada",
-                    "reservado_em": "2026-11-12T12:00:00Z",
-                }
-            ],
-        }
-        reservation = {
-            "id": 10,
-            "sessao_aula_id": 4,
-            "aluno_id": 5,
-            "situacao": "Confirmada",
-            "reservado_em": "2026-11-12T12:00:00Z",
-        }
-        payload = {"sessao_aula_id": 4, "aluno_id": 5}
-        calls = [
-            (
-                lambda: XanoClient.get_reservas("token", 4),
-                summary,
-                "GET",
-                "/reservas/4",
-                None,
-            ),
-            (
-                lambda: XanoClient.create_reserva("token", payload),
-                reservation,
-                "POST",
-                "/reservas",
-                payload,
-            ),
-            (
-                lambda: XanoClient.cancel_reserva("token", 10),
-                {**reservation, "situacao": "Cancelada"},
-                "PATCH",
-                "/reservas/cancelar/10",
-                None,
-            ),
-            (
-                lambda: XanoClient.set_reserva_resultado("token", 10, "Presente"),
-                {**reservation, "situacao": "Presente"},
-                "PATCH",
-                "/reservas/resultado/10",
-                {"resultado": "Presente"},
-            ),
-        ]
-        self._assert_calls(calls)
+    def test_reservation_api_wrappers_are_removed_from_frontend_client(self):
+        for method in (
+            "get_reservas",
+            "create_reserva",
+            "cancel_reserva",
+            "set_reserva_resultado",
+        ):
+            with self.subTest(method=method):
+                self.assertFalse(hasattr(XanoClient, method))
 
     def test_report_query_shape_and_aggregate_only_fields(self):
         report = {
@@ -222,7 +178,17 @@ class OperationClientTests(unittest.TestCase):
             ),
             report,
         )
-        self.assertEqual(result, report)
+        self.assertEqual(
+            result,
+            {
+                key: value
+                for key, value in report.items()
+                if key
+                not in {"reservas_nao_canceladas", "ocupacao_percentual"}
+            },
+        )
+        self.assertNotIn("reservas_nao_canceladas", result)
+        self.assertNotIn("ocupacao_percentual", result)
         self.assertEqual(requests[0].method, "GET")
         self.assertEqual(
             requests[0].url.path,
@@ -248,11 +214,6 @@ class OperationClientTests(unittest.TestCase):
             XanoClient.create_modalidade(
                 "token",
                 {"nome": "Funcional", "descricao": None, "situacao": "Ativo"},
-            )
-        with self.assertRaises(XanoAPIError):
-            XanoClient.create_reserva(
-                "token",
-                {"sessao_aula_id": 4, "aluno_id": 5, "aluno_nome": "Aluno"},
             )
         with self.assertRaises(XanoAPIError):
             self.invoke(
