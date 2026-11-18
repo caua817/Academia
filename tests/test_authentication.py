@@ -7,7 +7,9 @@ import httpx
 from academia.services.auth_client import (
     AuthenticationAPIError,
     AuthenticationClient,
+    LoginResult,
     validate_login_fields,
+    validate_new_password,
 )
 
 _HTTPX_CLIENT = httpx.Client
@@ -39,7 +41,7 @@ class AuthenticationClientTests(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(result, "session-token")
+        self.assertEqual(result, LoginResult(token="session-token"))
         self.assertEqual(requests[0].method, "POST")
         self.assertEqual(requests[0].url.path, "/api:sGd5fzIy/auth/login")
         self.assertEqual(
@@ -58,7 +60,127 @@ class AuthenticationClientTests(unittest.TestCase):
             ),
         )
 
-        self.assertEqual(result, "session-token")
+        self.assertEqual(result, LoginResult(token="session-token"))
+
+    def test_login_returns_password_change_challenge_without_session(self):
+        result, requests = self.invoke(
+            lambda: AuthenticationClient.login("user@example.com", "temporary"),
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "requires_password_change": True,
+                    "temporary_password_expired": False,
+                },
+                request=request,
+            ),
+        )
+
+        self.assertEqual(
+            result,
+            LoginResult(
+                token=None,
+                requires_password_change=True,
+                temporary_password_expired=False,
+            ),
+        )
+        self.assertNotIn("Authorization", requests[0].headers)
+
+    def test_login_rejects_session_in_password_change_challenge(self):
+        with self.assertRaises(AuthenticationAPIError):
+            self.invoke(
+                lambda: AuthenticationClient.login(
+                    "user@example.com",
+                    "temporary",
+                ),
+                lambda request: httpx.Response(
+                    200,
+                    json={
+                        "authToken": "must-not-be-issued",
+                        "requires_password_change": True,
+                    },
+                    request=request,
+                ),
+            )
+
+    def test_accept_invitation_sends_public_activation_payload(self):
+        result, requests = self.invoke(
+            lambda: AuthenticationClient.accept_employee_invitation(
+                " User@Example.com ",
+                "invite-token",
+                "Password1",
+                "Password1",
+            ),
+            lambda request: httpx.Response(
+                200,
+                json={"success": True},
+                request=request,
+            ),
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(requests[0].method, "POST")
+        self.assertEqual(
+            requests[0].url.path,
+            "/api:sGd5fzIy/funcionarios/convites/aceitar",
+        )
+        self.assertEqual(
+            json.loads(requests[0].content),
+            {
+                "email": "user@example.com",
+                "token": "invite-token",
+                "password": "Password1",
+                "password_confirmation": "Password1",
+            },
+        )
+        self.assertNotIn("Authorization", requests[0].headers)
+
+    def test_accept_invitation_rejects_unexpected_success_response(self):
+        with self.assertRaises(AuthenticationAPIError):
+            self.invoke(
+                lambda: AuthenticationClient.accept_employee_invitation(
+                    "user@example.com",
+                    "invite-token",
+                    "Password1",
+                    "Password1",
+                ),
+                lambda request: httpx.Response(
+                    200,
+                    json={"success": False},
+                    request=request,
+                ),
+            )
+
+    def test_temporary_password_change_sends_only_required_fields(self):
+        result, requests = self.invoke(
+            lambda: AuthenticationClient.change_temporary_password(
+                " User@Example.com ",
+                "Temporary1",
+                "NewPassword1",
+                "NewPassword1",
+            ),
+            lambda request: httpx.Response(
+                200,
+                json={"success": True},
+                request=request,
+            ),
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(requests[0].method, "POST")
+        self.assertEqual(
+            requests[0].url.path,
+            "/api:sGd5fzIy/auth/trocar-senha-temporaria",
+        )
+        self.assertEqual(
+            json.loads(requests[0].content),
+            {
+                "email": "user@example.com",
+                "temporary_password": "Temporary1",
+                "password": "NewPassword1",
+                "password_confirmation": "NewPassword1",
+            },
+        )
+        self.assertNotIn("Authorization", requests[0].headers)
 
     def test_login_rejects_success_response_without_token(self):
         with self.assertRaises(AuthenticationAPIError):
@@ -102,6 +224,17 @@ class AuthenticationValidationTests(unittest.TestCase):
         self.assertIsNotNone(validate_login_fields("user@example.com", " "))
         self.assertIsNone(
             validate_login_fields(" user@example.com ", " secret ")
+        )
+
+    def test_new_password_requires_eight_chars_letter_digit_and_match(self):
+        self.assertIsNotNone(validate_new_password("short1", "short1"))
+        self.assertIsNotNone(validate_new_password("Password", "Password"))
+        self.assertIsNotNone(validate_new_password("12345678", "12345678"))
+        self.assertIsNotNone(
+            validate_new_password("Password1", "Password2")
+        )
+        self.assertIsNone(
+            validate_new_password("Password1", "Password1")
         )
 
 if __name__ == "__main__":

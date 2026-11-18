@@ -1,5 +1,6 @@
 import os
 from collections.abc import Mapping
+from typing import TypeAlias
 
 import httpx
 
@@ -7,7 +8,16 @@ API_BASE_URL = os.getenv(
     "API_BASE_URL",
     "https://x8ki-letl-twmt.n7.xano.io/api:sGd5fzIy",
 )
-JsonPayload = Mapping[str, str | int | float | None]
+JsonValue: TypeAlias = (
+    str
+    | int
+    | float
+    | bool
+    | None
+    | list["JsonValue"]
+    | dict[str, "JsonValue"]
+)
+JsonPayload = Mapping[str, JsonValue]
 QueryParams = Mapping[str, str]
 
 
@@ -29,6 +39,11 @@ class XanoClient:
                     for character in str(key).casefold()
                     if character.isalnum()
                 )
+                if (
+                    normalized_key == "temporarypasswordexpired"
+                    and isinstance(value, bool)
+                ):
+                    continue
                 if (
                     "password" in normalized_key
                     or "senha" in normalized_key
@@ -173,6 +188,26 @@ class XanoClient:
             )
 
     @staticmethod
+    def _validate_temporary_password_payload(
+        payload: JsonPayload,
+        expected_fields: set[str],
+        resource_name: str,
+    ) -> None:
+        XanoClient._validate_payload_fields(
+            payload,
+            expected_fields,
+            resource_name,
+        )
+        if any(
+            not isinstance(payload.get(field), str)
+            or not payload.get(field)
+            for field in expected_fields
+        ):
+            raise XanoAPIError(
+                f"A solicitação de {resource_name} contém campos inválidos."
+            )
+
+    @staticmethod
     def get_alunos(token: str) -> list[dict]:
         """Busca os alunos e sinaliza explicitamente falhas da API."""
         data = XanoClient._request("GET", "/alunos", token)
@@ -208,6 +243,49 @@ class XanoClient:
         data = XanoClient._request(
             "POST",
             "/funcionarios/convites",
+            token,
+            payload,
+        )
+        return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def create_temporary_funcionario(
+        token: str,
+        payload: JsonPayload,
+    ) -> dict:
+        XanoClient._validate_temporary_password_payload(
+            payload,
+            {
+                "name",
+                "email",
+                "role",
+                "temporary_password",
+                "temporary_password_confirmation",
+            },
+            "cadastro de funcionário",
+        )
+        data = XanoClient._request(
+            "POST",
+            "/funcionarios/provisionar",
+            token,
+            payload,
+        )
+        return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def reissue_temporary_password(
+        token: str,
+        funcionario_id: int,
+        payload: JsonPayload,
+    ) -> dict:
+        XanoClient._validate_temporary_password_payload(
+            payload,
+            {"temporary_password", "temporary_password_confirmation"},
+            "reemissão de senha temporária",
+        )
+        data = XanoClient._request(
+            "PATCH",
+            f"/funcionarios/senha-temporaria/{funcionario_id}",
             token,
             payload,
         )

@@ -7,11 +7,14 @@ from academia.access_control import require_admin
 from academia.login import LoginState
 from academia.operacao import (
     OperacaoState,
+    active_instructor_options,
     active_student_options,
+    combine_session_datetime,
     to_api_timestamp,
     validate_date_range,
     validate_modalidade_fields,
     validate_sessao_fields,
+    sessoes_content,
 )
 from academia.services.xano_client import XanoAPIError
 
@@ -42,16 +45,29 @@ class OperationValidationTests(unittest.TestCase):
         self.assertEqual(options, [{"id": "3", "label": "Ana"}])
         self.assertNotIn("cpf", options[0])
 
-    def test_session_validation_checks_ids_time_and_capacity(self):
+    def test_instructor_options_only_include_active_named_instructors(self):
+        options = active_instructor_options(
+            [
+                {"id": 7, "name": "Ana", "role": "instrutor", "situacao": "Ativo"},
+                {"id": 8, "name": "Bia", "role": "instrutor", "situacao": "Inativo"},
+                {"id": 9, "name": "Caio", "role": "admin", "situacao": "Ativo"},
+                {"id": 0, "name": "Duda", "role": "instrutor", "situacao": "Ativo"},
+                {"id": 10, "role": "instrutor", "situacao": "Ativo"},
+            ]
+        )
+        self.assertEqual(options, [{"id": "7", "label": "Ana"}])
+
+    def test_session_validation_checks_date_times_ids_and_capacity(self):
         now = datetime(2026, 11, 12, 12, tzinfo=timezone(timedelta(hours=-3)))
-        valid = ("2", "7", "2026-11-13T10:00", "2026-11-13T11:00", "12")
+        valid = ("2", "7", "2026-11-13", "10:00", "11:00", "12")
         self.assertIsNone(validate_sessao_fields(*valid, now=now))
         self.assertIsNotNone(
             validate_sessao_fields(
                 "0",
                 "7",
-                "2026-11-13T10:00",
-                "2026-11-13T11:00",
+                "2026-11-13",
+                "10:00",
+                "11:00",
                 "12",
                 now=now,
             )
@@ -60,8 +76,9 @@ class OperationValidationTests(unittest.TestCase):
             validate_sessao_fields(
                 "2",
                 "7",
-                "2026-11-13T10:00",
-                "2026-11-13T10:00",
+                "2026-11-13",
+                "10:00",
+                "10:00",
                 "12",
                 now=now,
             )
@@ -70,11 +87,24 @@ class OperationValidationTests(unittest.TestCase):
             validate_sessao_fields(
                 "2",
                 "7",
-                "2026-11-13T10:00",
-                "2026-11-13T11:00",
+                "2026-11-13",
+                "10:00",
+                "11:00",
                 "0",
                 now=now,
             )
+        )
+
+    def test_single_session_date_is_combined_with_each_time(self):
+        self.assertEqual(
+            combine_session_datetime("2026-11-13", "10:30"),
+            "2026-11-13T10:30",
+        )
+        self.assertEqual(
+            to_api_timestamp(
+                combine_session_datetime("2026-11-13", "10:30")
+            ),
+            "2026-11-13T13:30:00Z",
         )
 
     def test_local_session_time_is_sent_as_utc(self):
@@ -91,6 +121,7 @@ class _AccessHarness:
             is_admin=False,
             is_verifying=False,
             error_message="",
+            authorized_route="",
         )
 
     async def get_state(self, state_type):
@@ -150,6 +181,7 @@ class _OperationStateHarness(_AccessHarness):
         self.report_metrics = []
         self.selected_sessao = {}
         self.selected_sessao_id = ""
+        self.instrutor_options = []
         self.data_inicio = ""
         self.data_fim = ""
         self.is_loading = False
@@ -165,8 +197,9 @@ class _OperationStateHarness(_AccessHarness):
         self.sessao_id = 0
         self.sessao_modalidade_id = ""
         self.sessao_instrutor_id = ""
-        self.sessao_inicio = ""
-        self.sessao_termino = ""
+        self.sessao_data = ""
+        self.sessao_hora_inicio = ""
+        self.sessao_hora_termino = ""
         self.sessao_capacidade = ""
         self.sessao_local = ""
         self.sessao_editing = False
@@ -181,6 +214,15 @@ class _OperationStateHarness(_AccessHarness):
     def _prepare_modality_options(self):
         OperacaoState._prepare_modality_options(self)
 
+    def _prepare_sessions(self):
+        OperacaoState._prepare_sessions(self)
+
+    def _date_filters(self):
+        return OperacaoState._date_filters(self)
+
+    def _reset_sessao_form(self):
+        OperacaoState._reset_sessao_form(self)
+
     def _api_error_message(self, error, action):
         return OperacaoState._api_error_message(self, error, action)
 
@@ -189,6 +231,14 @@ class _OperationStateHarness(_AccessHarness):
 
 
 class OperationScreenStateTests(unittest.IsolatedAsyncioTestCase):
+    async def run_event(self, name, state):
+        event = OperacaoState.__dict__[name].fn
+        return [result async for result in event(state)]
+
+    async def run_load_sessoes(self, state):
+        event = OperacaoState.__dict__["load_sessoes"].fn
+        return [result async for result in event(state)]
+
     async def run_load_modalidades(self, state):
         event = OperacaoState.__dict__["load_modalidades"].fn
         return [result async for result in event(state)]
@@ -227,6 +277,153 @@ class OperationScreenStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.modalidades, [])
         self.assertTrue(state.error_message)
         self.assertFalse(state.is_loading)
+
+    async def test_edit_session_splits_local_date_and_times(self):
+        state = _OperationStateHarness()
+        state.sessoes = [
+            {
+                "id": 4,
+                "modalidade_id": 2,
+                "instrutor_id": 7,
+                "inicio": "2026-11-13T13:00:00Z",
+                "termino": "2026-11-13T14:30:00Z",
+                "capacidade": 12,
+                "local": "Sala 1",
+            }
+        ]
+        OperacaoState.__dict__["edit_sessao"].fn(state, 4)
+        self.assertEqual(state.sessao_data, "2026-11-13")
+        self.assertEqual(state.sessao_hora_inicio, "10:00")
+        self.assertEqual(state.sessao_hora_termino, "11:30")
+        self.assertEqual(state.sessao_instrutor_id, "7")
+        self.assertTrue(state.sessao_editing)
+
+    async def test_create_session_combines_one_date_and_preserves_api_payload(self):
+        state = _OperationStateHarness()
+        state.sessao_modalidade_id = "2"
+        state.sessao_instrutor_id = "7"
+        state.sessao_data = "2027-01-02"
+        state.sessao_hora_inicio = "10:00"
+        state.sessao_hora_termino = "11:00"
+        state.sessao_capacidade = "12"
+        state.sessao_local = "Sala 1"
+        state.data_inicio = "2027-01-02"
+        state.data_fim = "2027-01-16"
+        with (
+            patch(
+                "academia.access_control.XanoClient.get_current_user",
+                return_value={"role": "admin"},
+            ),
+            patch(
+                "academia.operacao.XanoClient.create_sessao",
+            ) as create_session,
+            patch(
+                "academia.operacao.XanoClient.get_modalidades",
+                return_value=[],
+            ),
+            patch(
+                "academia.operacao.XanoClient.get_sessoes",
+                return_value=[],
+            ),
+        ):
+            await self.run_event("save_sessao", state)
+        create_session.assert_called_once_with(
+            "session-token",
+            {
+                "modalidade_id": 2,
+                "instrutor_id": 7,
+                "inicio": "2027-01-02T13:00:00Z",
+                "termino": "2027-01-02T14:00:00Z",
+                "capacidade": 12,
+                "local": "Sala 1",
+            },
+        )
+        self.assertEqual(state.success_message, "Sessão criada com sucesso.")
+
+    async def test_invalid_session_times_do_not_call_api(self):
+        state = _OperationStateHarness()
+        state.sessao_modalidade_id = "2"
+        state.sessao_instrutor_id = "7"
+        state.sessao_data = "2027-01-02"
+        state.sessao_hora_inicio = "11:00"
+        state.sessao_hora_termino = "10:00"
+        state.sessao_capacidade = "12"
+        with patch(
+            "academia.operacao.XanoClient.create_sessao",
+        ) as create_session:
+            await self.run_event("save_sessao", state)
+        create_session.assert_not_called()
+        self.assertIn("posterior", state.form_error)
+
+    async def test_load_sessions_exposes_only_active_instructors_by_name(self):
+        state = _OperationStateHarness()
+        state.data_inicio = "2026-11-13"
+        state.data_fim = "2026-11-14"
+        employees = [
+            {"id": 7, "name": "Ana", "role": "instrutor", "situacao": "Ativo"},
+            {"id": 8, "name": "Bia", "role": "instrutor", "situacao": "Inativo"},
+            {"id": 9, "name": "Caio", "role": "admin", "situacao": "Ativo"},
+        ]
+        with (
+            patch(
+                "academia.access_control.XanoClient.get_current_user",
+                return_value={"role": "admin"},
+            ),
+            patch(
+                "academia.operacao.XanoClient.get_modalidades",
+                return_value=[],
+            ),
+            patch(
+                "academia.operacao.XanoClient.get_funcionarios",
+                return_value=employees,
+            ),
+            patch(
+                "academia.operacao.XanoClient.get_sessoes",
+                return_value=[],
+            ) as get_sessions,
+        ):
+            await self.run_load_sessoes(state)
+        get_sessions.assert_called_once_with(
+            "session-token",
+            "2026-11-13",
+            "2026-11-14",
+        )
+        self.assertEqual(
+            state.instrutor_options,
+            [{"id": "7", "label": "Ana"}],
+        )
+        self.assertEqual(state.sessoes, [])
+        self.assertEqual(state.error_message, "")
+
+    async def test_load_sessions_reports_employee_api_failure(self):
+        state = _OperationStateHarness()
+        with (
+            patch(
+                "academia.access_control.XanoClient.get_current_user",
+                return_value={"role": "admin"},
+            ),
+            patch(
+                "academia.operacao.XanoClient.get_modalidades",
+                return_value=[],
+            ),
+            patch(
+                "academia.operacao.XanoClient.get_funcionarios",
+                side_effect=XanoAPIError("offline"),
+            ),
+        ):
+            await self.run_load_sessoes(state)
+        self.assertEqual(state.instrutor_options, [])
+        self.assertTrue(state.error_message)
+        self.assertFalse(state.is_loading)
+
+    async def test_session_form_renders_one_date_and_named_instructor(self):
+        rendered = str(sessoes_content())
+        self.assertIn("Data da aula", rendered)
+        self.assertIn("Hor\\u00e1rio de in\\u00edcio", rendered)
+        self.assertIn("Hor\\u00e1rio de t\\u00e9rmino", rendered)
+        self.assertIn("Selecione um instrutor", rendered)
+        self.assertNotIn("ID do instrutor", rendered)
+        self.assertNotIn('type:"datetime-local"', rendered)
 
 
 if __name__ == "__main__":

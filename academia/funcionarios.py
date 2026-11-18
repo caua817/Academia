@@ -1,12 +1,60 @@
 import re
+from typing import Any
 
 import reflex as rx
 
 from academia.access_control import AdminAccessState, begin_admin_check
 from academia.login import LoginState
+from academia.services.auth_client import validate_new_password
 from academia.services.xano_client import XanoAPIError, XanoClient
 
 EMPLOYEE_ROLES = ("admin", "recepcionista", "instrutor")
+TEMPORARY_PASSWORD_FIELD_ID = "employee-temporary-password"
+TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID = (
+    "employee-temporary-password-confirmation"
+)
+
+
+def temporary_password_fields() -> rx.Component:
+    return rx.vstack(
+        rx.vstack(
+            rx.text("Senha temporária *", size="2", weight="medium"),
+            rx.input(
+                id=TEMPORARY_PASSWORD_FIELD_ID,
+                name="temporary_password",
+                type="password",
+                auto_complete=False,
+                required=True,
+                min_length=8,
+                disabled=FuncionariosState.is_saving,
+                width="100%",
+            ),
+            spacing="1",
+            width="100%",
+        ),
+        rx.vstack(
+            rx.text("Confirme a senha temporária *", size="2", weight="medium"),
+            rx.input(
+                id=TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID,
+                name="temporary_password_confirmation",
+                type="password",
+                auto_complete=False,
+                required=True,
+                min_length=8,
+                disabled=FuncionariosState.is_saving,
+                width="100%",
+            ),
+            spacing="1",
+            width="100%",
+        ),
+        rx.text(
+            "A senha expira em 24 horas e deverá ser trocada no primeiro acesso.",
+            size="1",
+            color="var(--gray-9)",
+        ),
+        spacing="3",
+        width="100%",
+    )
 
 
 async def update_admin_access(
@@ -38,7 +86,14 @@ def filter_funcionarios(
         if normalized_query
         in " ".join(
             str(funcionario.get(field) or "")
-            for field in ("name", "email", "role", "situacao", "status_convite")
+            for field in (
+                "name",
+                "email",
+                "role",
+                "situacao",
+                "status_convite",
+                "temporary_password_expired",
+            )
         ).casefold()
     ]
 
@@ -74,6 +129,8 @@ class FuncionariosState(rx.State):
     form_error: str = ""
     is_form_open: bool = False
     is_editing: bool = False
+    is_reissuing: bool = False
+    credential_mode: str = "temporary"
     funcionario_id: int = 0
     form_name: str = ""
     form_email: str = ""
@@ -112,6 +169,7 @@ class FuncionariosState(rx.State):
         self.success_message = ""
         self.is_form_open = False
         self.is_editing = False
+        self.is_reissuing = False
         self._reset_form()
         self.is_status_dialog_open = False
         self.funcionario_id_to_change = 0
@@ -150,6 +208,8 @@ class FuncionariosState(rx.State):
         self.form_name = ""
         self.form_email = ""
         self.form_role = "recepcionista"
+        self.credential_mode = "temporary"
+        self.is_reissuing = False
         self.form_error = ""
 
     def _require_admin(self) -> bool:
@@ -238,10 +298,27 @@ class FuncionariosState(rx.State):
         self.form_role = value
 
     @rx.event
+    def set_credential_mode(self, value: str):
+        if value in {"temporary", "invite"}:
+            self.credential_mode = value
+
+    @rx.event
     def set_is_form_open(self, is_open: bool):
+        should_clear_temporary_password = self.is_reissuing or (
+            not self.is_editing and self.credential_mode == "temporary"
+        )
         self.is_form_open = is_open
         if not is_open:
             self._reset_form()
+            self.is_editing = False
+            if should_clear_temporary_password:
+                return [
+                    rx.set_value(TEMPORARY_PASSWORD_FIELD_ID, ""),
+                    rx.set_value(
+                        TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID,
+                        "",
+                    ),
+                ]
 
     @rx.event
     def set_is_status_dialog_open(self, is_open: bool):
@@ -255,6 +332,38 @@ class FuncionariosState(rx.State):
             return
         self._reset_form()
         self.is_editing = False
+        self.error_message = ""
+        self.success_message = ""
+        self.is_form_open = True
+
+    @rx.event
+    def open_temporary_password_reissue(self, funcionario_id: int):
+        if not self._require_admin():
+            return
+
+        funcionario = next(
+            (
+                item
+                for item in self.funcionarios
+                if str(item.get("id")) == str(funcionario_id)
+            ),
+            None,
+        )
+        if funcionario is None or not funcionario.get(
+            "temporary_password_expired"
+        ):
+            self.error_message = (
+                "A senha temporária deste funcionário não está expirada."
+            )
+            return
+
+        self._reset_form()
+        self.is_editing = False
+        self.is_reissuing = True
+        self.funcionario_id = funcionario_id
+        self.form_name = str(funcionario.get("name") or "")
+        self.form_email = str(funcionario.get("email") or "")
+        self.form_role = str(funcionario.get("role") or "")
         self.error_message = ""
         self.success_message = ""
         self.is_form_open = True
@@ -307,20 +416,66 @@ class FuncionariosState(rx.State):
             self.is_loading_details = False
 
     @rx.event
-    async def save_funcionario(self):
-        if not self._require_admin():
-            return
-
-        validation_error = validate_funcionario_fields(
-            self.form_name,
-            self.form_email,
-            self.form_role,
+    async def save_funcionario(self, form_data: dict[str, Any]):
+        uses_temporary_password = self.is_reissuing or (
+            not self.is_editing and self.credential_mode == "temporary"
         )
-        if validation_error:
-            self.form_error = validation_error
+        if not self._require_admin():
+            if uses_temporary_password:
+                yield rx.set_value(TEMPORARY_PASSWORD_FIELD_ID, "")
+                yield rx.set_value(
+                    TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID,
+                    "",
+                )
+            return
+        if self.is_saving:
+            if uses_temporary_password:
+                yield rx.set_value(TEMPORARY_PASSWORD_FIELD_ID, "")
+                yield rx.set_value(
+                    TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID,
+                    "",
+                )
             return
 
         was_editing = self.is_editing
+        was_reissuing = self.is_reissuing
+        uses_temporary_password = was_reissuing or uses_temporary_password
+        credentials_cleared = False
+        password_value = form_data.get("temporary_password", "")
+        password_confirmation_value = form_data.get(
+            "temporary_password_confirmation",
+            "",
+        )
+        password = password_value if isinstance(password_value, str) else ""
+        password_confirmation = (
+            password_confirmation_value
+            if isinstance(password_confirmation_value, str)
+            else ""
+        )
+        validation_error = (
+            None
+            if was_reissuing
+            else validate_funcionario_fields(
+                self.form_name,
+                self.form_email,
+                self.form_role,
+            )
+        )
+        if validation_error is None and uses_temporary_password:
+            validation_error = validate_new_password(
+                password,
+                password_confirmation,
+            )
+        if validation_error:
+            self.form_error = validation_error
+            if uses_temporary_password:
+                yield rx.set_value(TEMPORARY_PASSWORD_FIELD_ID, "")
+                yield rx.set_value(
+                    TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID,
+                    "",
+                )
+            return
+
         self.form_error = ""
         self.is_saving = True
         yield
@@ -332,20 +487,42 @@ class FuncionariosState(rx.State):
                 yield rx.redirect("/login")
                 return
 
-            payload = {
+            operational_payload = {
                 "name": self.form_name.strip(),
                 "email": self.form_email.strip().lower(),
                 "role": self.form_role,
             }
             try:
-                if was_editing:
+                if was_reissuing:
+                    XanoClient.reissue_temporary_password(
+                        token,
+                        self.funcionario_id,
+                        {
+                            "temporary_password": password,
+                            "temporary_password_confirmation": (
+                                password_confirmation
+                            ),
+                        },
+                    )
+                elif was_editing:
                     XanoClient.update_funcionario(
                         token,
                         self.funcionario_id,
-                        payload,
+                        operational_payload,
+                    )
+                elif uses_temporary_password:
+                    XanoClient.create_temporary_funcionario(
+                        token,
+                        {
+                            **operational_payload,
+                            "temporary_password": password,
+                            "temporary_password_confirmation": (
+                                password_confirmation
+                            ),
+                        },
                     )
                 else:
-                    XanoClient.invite_funcionario(token, payload)
+                    XanoClient.invite_funcionario(token, operational_payload)
             except XanoAPIError as error:
                 self.form_error = self._api_error_message(
                     error,
@@ -362,12 +539,28 @@ class FuncionariosState(rx.State):
                     )
                 return
 
+            if uses_temporary_password:
+                yield rx.set_value(TEMPORARY_PASSWORD_FIELD_ID, "")
+                yield rx.set_value(
+                    TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID,
+                    "",
+                )
+                credentials_cleared = True
             self.is_form_open = False
-            self.success_message = (
-                "Funcionário atualizado com sucesso."
-                if was_editing
-                else "Convite enviado com sucesso."
-            )
+            if was_editing:
+                self.success_message = "Funcionário atualizado com sucesso."
+            elif was_reissuing:
+                self.success_message = (
+                    "Senha temporária reemitida. Entregue-a ao funcionário "
+                    "com segurança; ela expira em 24 horas."
+                )
+            elif uses_temporary_password:
+                self.success_message = (
+                    "Funcionário cadastrado. Entregue a senha temporária "
+                    "ao funcionário com segurança; ela expira em 24 horas."
+                )
+            else:
+                self.success_message = "Convite enviado com sucesso."
             self.is_editing = False
             self._reset_form()
             expired = await self._reload_funcionarios(
@@ -379,6 +572,12 @@ class FuncionariosState(rx.State):
                 yield rx.redirect("/login")
         finally:
             self.is_saving = False
+            if uses_temporary_password and not credentials_cleared:
+                yield rx.set_value(TEMPORARY_PASSWORD_FIELD_ID, "")
+                yield rx.set_value(
+                    TEMPORARY_PASSWORD_CONFIRMATION_FIELD_ID,
+                    "",
+                )
 
     @rx.event
     def request_status_change(self, funcionario_id: int):
@@ -480,6 +679,10 @@ def employee_row(funcionario: dict) -> rx.Component:
     status = funcionario.get("situacao", "Desconhecido")
     is_active = (status == "Ativo") | (status == "ativo")
     invite_status = funcionario.get("status_convite", "")
+    temporary_password_expired = funcionario.get(
+        "temporary_password_expired",
+        False,
+    )
     return rx.table.row(
         rx.table.cell(
             rx.vstack(
@@ -504,9 +707,27 @@ def employee_row(funcionario: dict) -> rx.Component:
                 variant="soft",
             )
         ),
-        rx.table.cell(rx.cond(invite_status, invite_status, "—")),
+        rx.table.cell(
+            rx.cond(
+                temporary_password_expired,
+                "Senha temporária expirada",
+                rx.cond(invite_status, invite_status, "—"),
+            )
+        ),
         rx.table.cell(
             rx.hstack(
+                rx.cond(
+                    temporary_password_expired,
+                    rx.button(
+                        "Reemitir senha temporária",
+                        variant="soft",
+                        on_click=FuncionariosState.open_temporary_password_reissue(
+                            funcionario.get("id", 0)
+                        ),
+                        disabled=FuncionariosState.is_saving,
+                    ),
+                    rx.fragment(),
+                ),
                 rx.button(
                     rx.icon("pencil", size=15),
                     "Editar",
@@ -541,18 +762,87 @@ def employee_row(funcionario: dict) -> rx.Component:
 
 
 def employee_form_dialog() -> rx.Component:
+    employee_fields = rx.vstack(
+        rx.vstack(
+            rx.text("Nome *", size="2", weight="medium"),
+            rx.input(
+                value=FuncionariosState.form_name,
+                on_change=FuncionariosState.set_form_name,
+                placeholder="Nome completo",
+                max_length=200,
+                disabled=FuncionariosState.is_saving,
+                width="100%",
+            ),
+            spacing="1",
+            width="100%",
+        ),
+        rx.vstack(
+            rx.text("E-mail *", size="2", weight="medium"),
+            rx.input(
+                type="email",
+                value=FuncionariosState.form_email,
+                on_change=FuncionariosState.set_form_email,
+                placeholder="funcionario@academia.com",
+                max_length=254,
+                disabled=FuncionariosState.is_saving,
+                width="100%",
+            ),
+            spacing="1",
+            width="100%",
+        ),
+        rx.vstack(
+            rx.text("Perfil *", size="2", weight="medium"),
+            rx.select.root(
+                rx.select.trigger(
+                    placeholder="Selecione um perfil",
+                    width="100%",
+                ),
+                rx.select.content(
+                    rx.select.group(
+                        rx.select.item("Administrador", value="admin"),
+                        rx.select.item(
+                            "Recepcionista",
+                            value="recepcionista",
+                        ),
+                        rx.select.item("Instrutor", value="instrutor"),
+                    )
+                ),
+                value=FuncionariosState.form_role,
+                on_change=FuncionariosState.set_form_role,
+                disabled=FuncionariosState.is_saving,
+            ),
+            spacing="1",
+            width="100%",
+        ),
+        spacing="4",
+        width="100%",
+    )
     return rx.dialog.root(
         rx.dialog.content(
             rx.dialog.title(
                 rx.cond(
-                    FuncionariosState.is_editing,
-                    "Editar funcionário",
-                    "Convidar funcionário",
+                    FuncionariosState.is_reissuing,
+                    "Reemitir senha temporária",
+                    rx.cond(
+                        FuncionariosState.is_editing,
+                        "Editar funcionário",
+                        "Cadastrar funcionário",
+                    ),
                 ),
                 color="white",
             ),
             rx.dialog.description(
-                "Informe os dados operacionais. A senha é definida pelo próprio funcionário.",
+                rx.cond(
+                    FuncionariosState.is_reissuing,
+                    "Defina uma nova senha temporária para este funcionário.",
+                    rx.cond(
+                        FuncionariosState.is_editing,
+                        "Atualize os dados operacionais do funcionário.",
+                        "Cadastre presencialmente com senha temporária ou envie "
+                        "um convite por e-mail quando o frontend HTTPS estiver "
+                        "configurado.",
+                    ),
+                ),
                 color="var(--gray-9)",
             ),
             rx.cond(
@@ -565,58 +855,82 @@ def employee_form_dialog() -> rx.Component:
                     width="100%",
                 ),
             ),
-            rx.vstack(
+            rx.form.root(
                 rx.vstack(
-                    rx.text("Nome *", size="2", weight="medium"),
-                    rx.input(
-                        value=FuncionariosState.form_name,
-                        on_change=FuncionariosState.set_form_name,
-                        placeholder="Nome completo",
-                        max_length=200,
-                        disabled=FuncionariosState.is_saving,
-                        width="100%",
-                    ),
-                    spacing="1",
-                    width="100%",
-                ),
-                rx.vstack(
-                    rx.text("E-mail *", size="2", weight="medium"),
-                    rx.input(
-                        type="email",
-                        value=FuncionariosState.form_email,
-                        on_change=FuncionariosState.set_form_email,
-                        placeholder="funcionario@academia.com",
-                        max_length=254,
-                        disabled=FuncionariosState.is_saving,
-                        width="100%",
-                    ),
-                    spacing="1",
-                    width="100%",
-                ),
-                rx.vstack(
-                    rx.text("Perfil *", size="2", weight="medium"),
-                    rx.select.root(
-                        rx.select.trigger(
-                            placeholder="Selecione um perfil",
-                            width="100%",
+                    rx.cond(
+                        FuncionariosState.is_reissuing,
+                        rx.text(
+                            FuncionariosState.form_name,
+                            " — ",
+                            FuncionariosState.form_email,
+                            color="var(--gray-9)",
                         ),
-                        rx.select.content(
-                            rx.select.group(
-                                rx.select.item("Administrador", value="admin"),
-                                rx.select.item(
-                                    "Recepcionista",
-                                    value="recepcionista",
+                        rx.cond(
+                            FuncionariosState.is_editing,
+                            employee_fields,
+                            rx.vstack(
+                                employee_fields,
+                                rx.text(
+                                    "Como a credencial será entregue?",
+                                    size="2",
+                                    weight="medium",
                                 ),
-                                rx.select.item("Instrutor", value="instrutor"),
+                                rx.hstack(
+                                    rx.button(
+                                        "Senha temporária presencial",
+                                        type="button",
+                                        variant=rx.cond(
+                                            FuncionariosState.credential_mode
+                                            == "temporary",
+                                            "solid",
+                                            "soft",
+                                        ),
+                                        on_click=FuncionariosState.set_credential_mode(
+                                            "temporary"
+                                        ),
+                                    ),
+                                    rx.button(
+                                        "Convite por e-mail",
+                                        type="button",
+                                        variant=rx.cond(
+                                            FuncionariosState.credential_mode
+                                            == "invite",
+                                            "solid",
+                                            "soft",
+                                        ),
+                                        on_click=FuncionariosState.set_credential_mode(
+                                            "invite"
+                                        ),
+                                    ),
+                                    flex_wrap="wrap",
+                                    spacing="2",
+                                ),
+                                rx.cond(
+                                    FuncionariosState.credential_mode == "invite",
+                                    rx.text(
+                                        "O convite depende de uma URL HTTPS "
+                                        "pública configurada no Xano.",
+                                        size="1",
+                                        color="var(--gray-9)",
+                                    ),
+                                ),
+                                spacing="4",
+                                width="100%",
+                            ),
+                        ),
+                    ),
+                    rx.cond(
+                        FuncionariosState.is_reissuing
+                        | (
+                            (~FuncionariosState.is_editing)
+                            & (
+                                FuncionariosState.credential_mode
+                                == "temporary"
                             )
                         ),
-                        value=FuncionariosState.form_role,
-                        on_change=FuncionariosState.set_form_role,
-                        disabled=FuncionariosState.is_saving,
+                        temporary_password_fields(),
+                        rx.fragment(),
                     ),
-                    spacing="1",
-                    width="100%",
-                ),
                 rx.hstack(
                     rx.dialog.close(
                         rx.button(
@@ -628,11 +942,20 @@ def employee_form_dialog() -> rx.Component:
                     ),
                     rx.button(
                         rx.cond(
-                            FuncionariosState.is_editing,
-                            "Salvar alterações",
-                            "Enviar convite",
+                            FuncionariosState.is_reissuing,
+                            "Reemitir senha",
+                            rx.cond(
+                                FuncionariosState.is_editing,
+                                "Salvar alterações",
+                                rx.cond(
+                                    FuncionariosState.credential_mode
+                                    == "temporary",
+                                    "Cadastrar funcionário",
+                                    "Enviar convite",
+                                ),
+                            ),
                         ),
-                        on_click=FuncionariosState.save_funcionario,
+                        type="submit",
                         loading=FuncionariosState.is_saving,
                         color_scheme="blue",
                     ),
@@ -643,6 +966,8 @@ def employee_form_dialog() -> rx.Component:
                 spacing="4",
                 width="100%",
                 margin_top="4",
+            ),
+                on_submit=FuncionariosState.save_funcionario,
             ),
             background="#121215",
             border="1px solid rgba(255, 255, 255, 0.15)",
@@ -717,7 +1042,7 @@ def employee_management_content() -> rx.Component:
                         rx.table.column_header_cell("FUNCIONÁRIO"),
                         rx.table.column_header_cell("PERFIL"),
                         rx.table.column_header_cell("SITUAÇÃO"),
-                        rx.table.column_header_cell("CONVITE"),
+                        rx.table.column_header_cell("CREDENCIAL"),
                         rx.table.column_header_cell("AÇÕES"),
                     )
                 ),
@@ -758,7 +1083,7 @@ def employee_management_content() -> rx.Component:
                 ),
                 rx.heading("Nenhum funcionário cadastrado", size="4", color="white"),
                 rx.text(
-                    "Os funcionários convidados aparecerão nesta lista.",
+                    "Os funcionários cadastrados e convidados aparecerão nesta lista.",
                     size="2",
                     color="var(--gray-9)",
                 ),
@@ -783,7 +1108,7 @@ def employee_management_content() -> rx.Component:
             rx.spacer(),
             rx.button(
                 rx.icon("user-round-plus", size=17),
-                "Convidar funcionário",
+                "Cadastrar funcionário",
                 color_scheme="blue",
                 on_click=FuncionariosState.open_new_funcionario,
             ),

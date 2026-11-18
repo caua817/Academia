@@ -10,10 +10,10 @@ query "alunos/desativar/{aluno_id}" verb=PATCH {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
+    function.run "Quick Start/enforce_profile_access" {
       input = {
         user_id: $auth.id
-        required_role: "admin"
+        allow_receptionist: true
       }
     } as $role_check
 

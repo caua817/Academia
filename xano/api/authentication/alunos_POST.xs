@@ -1,4 +1,4 @@
-// Cadastra um aluno para usuários administradores.
+// Cadastra um aluno para administradores e recepcionistas.
 query alunos verb=POST {
   api_group = "Authentication"
   auth = "user"
@@ -13,8 +13,8 @@ query alunos verb=POST {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
-      input = {user_id: $auth.id, required_role: "admin"}
+    function.run "Quick Start/enforce_profile_access" {
+      input = {user_id: $auth.id, allow_receptionist: true}
     } as $role_check
   
     precondition (($input.nome|strlen) > 0) {

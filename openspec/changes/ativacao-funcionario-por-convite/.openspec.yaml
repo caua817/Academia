@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-11-14
+goal: Permitir que funcionários convidados configurem a própria senha por link
+  de uso único, com validação e consumo atômico no Xano.

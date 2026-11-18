@@ -17,8 +17,14 @@ table user {
     enum situacao?=Ativo {
       values = ["Ativo", "Inativo"]
     }
+    // Credencial inicial que precisa ser substituída antes do login normal.
+    bool? temporary_password?
+    timestamp? temporary_password_expires_at?
+    timestamp? temporary_password_lock_at?
     // Campo interno para serializar alterações da agenda do instrutor.
     timestamp? agenda_lock_at?
+    // Campo interno para serializar aceitações de convite.
+    timestamp? invitation_lock_at?
   
     object password_reset? {
       schema {

@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 import reflex as rx
 
-from academia.access_control import begin_admin_check, require_admin
+from academia.access_control import begin_admin_check, require_route_access
 from academia.login import LoginState
 from academia.planos import format_currency
 from academia.services.xano_client import XanoAPIError, XanoClient
@@ -138,9 +138,9 @@ class MatriculasState(rx.State):
         self.error_message = ""
         yield
 
-        token, should_redirect = await require_admin(self, "matriculas")
+        token, should_redirect = await require_route_access(self, "matriculas")
         if not token:
-            self.is_loading = False
+            self._clear_sensitive_data()
             if should_redirect:
                 yield rx.redirect("/login")
             return
@@ -687,4 +687,5 @@ def matriculas_page() -> rx.Component:
         "Gestão de matrículas",
         "Registre contratos e consulte o histórico de cada aluno.",
         matriculas_content(),
+        access_scope="operations",
     )

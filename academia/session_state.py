@@ -56,5 +56,4 @@ async def clear_app_session(state: rx.State) -> None:
     login_state = await state.get_state(LoginState)
     login_state.auth_token = ""
     login_state.email = ""
-    login_state.password = ""
     login_state.password_visible = False

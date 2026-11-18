@@ -7,8 +7,13 @@ query mensalidades verb=GET {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
-      input = {user_id: $auth.id, required_role: "admin"}
+    function.run "Quick Start/enforce_profile_access" {
+      input = {user_id: $auth.id, allow_receptionist: true}
+      mock = {
+        "returns a paid monthly status": "admin"
+        "returns a pending monthly status": "admin"
+        "returns an overdue monthly status": "admin"
+      }
     } as $role_check
 
     var $today_text {
@@ -25,15 +30,66 @@ query mensalidades verb=GET {
           table: "matricula"
           where: $db.mensalidade.matricula_id == $db.matricula.id
         }
+        pagamento_ativo: {
+          table: "pagamento"
+          type: "left"
+          where: $db.mensalidade.id == $db.pagamento_ativo.mensalidade_id && $db.pagamento_ativo.situacao == "Registrado"
+        }
         aluno: {
           table: "aluno"
           where: $db.matricula.aluno_id == $db.aluno.id
         }
       }
 
-      eval = {aluno_nome: $db.aluno.nome}
+      eval = {
+        aluno_nome: $db.aluno.nome
+        pagamento_ativo_id: $db.pagamento_ativo.id
+        pagamento_ativo_forma: $db.pagamento_ativo.forma_pagamento
+        pagamento_ativo_data: $db.pagamento_ativo.data_pagamento
+      }
       sort = {data_vencimento: "asc"}
       return = {type: "list"}
+      mock = {
+        "returns a paid monthly status": [
+          {
+            id: 1
+            matricula_id: 2
+            aluno_nome: "Aluno"
+            competencia: "2026-01"
+            data_vencimento: "2000-01-01"
+            valor: 100
+            pagamento_ativo_id: 3
+            pagamento_ativo_forma: "PIX"
+            pagamento_ativo_data: "2026-01-10T12:00:00-03:00"
+          }
+        ]
+        "returns a pending monthly status": [
+          {
+            id: 4
+            matricula_id: 2
+            aluno_nome: "Aluno"
+            competencia: "2999-01"
+            data_vencimento: "2999-01-01"
+            valor: 100
+            pagamento_ativo_id: null
+            pagamento_ativo_forma: null
+            pagamento_ativo_data: null
+          }
+        ]
+        "returns an overdue monthly status": [
+          {
+            id: 5
+            matricula_id: 2
+            aluno_nome: "Aluno"
+            competencia: "2000-01"
+            data_vencimento: "2000-01-01"
+            valor: 100
+            pagamento_ativo_id: null
+            pagamento_ativo_forma: null
+            pagamento_ativo_data: null
+          }
+        ]
+      }
     } as $mensalidades
 
     var $mensalidades_visiveis {
@@ -42,11 +98,6 @@ query mensalidades verb=GET {
 
     foreach ($mensalidades) {
       each as $mensalidade {
-        db.query pagamento {
-          where = $db.pagamento.mensalidade_id == $mensalidade.id && $db.pagamento.situacao == "Registrado"
-          return = {type: "single"}
-        } as $pagamento_ativo
-
         var $situacao {
           value = "Pendente"
         }
@@ -64,21 +115,21 @@ query mensalidades verb=GET {
         }
 
         conditional {
-          if ($pagamento_ativo != null) {
+          if ($mensalidade.pagamento_ativo_id != null) {
             var.update $situacao {
               value = "Paga"
             }
 
             var.update $pagamento_id {
-              value = $pagamento_ativo.id
+              value = $mensalidade.pagamento_ativo_id
             }
 
             var.update $forma_pagamento {
-              value = $pagamento_ativo.forma_pagamento
+              value = $mensalidade.pagamento_ativo_forma
             }
 
             var.update $data_pagamento {
-              value = $pagamento_ativo.data_pagamento
+              value = $mensalidade.pagamento_ativo_data
                 |format_timestamp:"Y-m-d H:i:s":"America/Sao_Paulo"
             }
           }
@@ -113,4 +164,64 @@ query mensalidades verb=GET {
 
   response = $mensalidades_visiveis
   guid = "_gUzf4FuYv6nXxi0blxS_ZwYo3k"
+
+  test "returns a paid monthly status" {
+    input = {}
+    expect.to_equal ($response) {
+      value = [
+        {
+          id: 1
+          matricula_id: 2
+          aluno_nome: "Aluno"
+          competencia: "2026-01"
+          data_vencimento: "2000-01-01"
+          valor: 100
+          situacao: "Paga"
+          pagamento_id: 3
+          forma_pagamento: "PIX"
+          data_pagamento: "2026-01-10 12:00:00"
+        }
+      ]
+    }
+  }
+
+  test "returns a pending monthly status" {
+    input = {}
+    expect.to_equal ($response) {
+      value = [
+        {
+          id: 4
+          matricula_id: 2
+          aluno_nome: "Aluno"
+          competencia: "2999-01"
+          data_vencimento: "2999-01-01"
+          valor: 100
+          situacao: "Pendente"
+          pagamento_id: 0
+          forma_pagamento: ""
+          data_pagamento: ""
+        }
+      ]
+    }
+  }
+
+  test "returns an overdue monthly status" {
+    input = {}
+    expect.to_equal ($response) {
+      value = [
+        {
+          id: 5
+          matricula_id: 2
+          aluno_nome: "Aluno"
+          competencia: "2000-01"
+          data_vencimento: "2000-01-01"
+          valor: 100
+          situacao: "Atrasada"
+          pagamento_id: 0
+          forma_pagamento: ""
+          data_pagamento: ""
+        }
+      ]
+    }
+  }
 }

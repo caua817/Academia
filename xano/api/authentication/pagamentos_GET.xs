@@ -1,4 +1,4 @@
-// Lista lançamentos de pagamento e suas correções para administradores.
+// Lista lançamentos de pagamento e suas correções para a equipe autorizada.
 query pagamentos verb=GET {
   api_group = "Authentication"
   auth = "user"
@@ -7,8 +7,8 @@ query pagamentos verb=GET {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
-      input = {user_id: $auth.id, required_role: "admin"}
+    function.run "Quick Start/enforce_profile_access" {
+      input = {user_id: $auth.id, allow_receptionist: true}
     } as $role_check
 
     db.query pagamento {
@@ -36,22 +36,53 @@ query pagamentos verb=GET {
     } as $pagamentos
 
     var $pagamentos_visiveis {
-      value = $pagamentos
-        |map:{
-          id:$$.id,
-          mensalidade_id:$$.mensalidade_id,
-          aluno_nome:$$.aluno_nome,
-          competencia:$$.competencia,
-          valor:$$.valor,
-          forma_pagamento:$$.forma_pagamento,
-          data_pagamento:$$.data_pagamento,
-          registrado_por:$$.registrado_por,
-          situacao:$$.situacao,
-          tipo_correcao:$$.tipo_correcao,
-          motivo_correcao:$$.motivo_correcao,
-          corrigido_em:$$.corrigido_em,
-          corrigido_por:$$.corrigido_por
+      value = []
+    }
+
+    foreach ($pagamentos) {
+      each as $pagamento {
+        conditional {
+          if ($role_check == "admin") {
+            var.update $pagamentos_visiveis {
+              value = $pagamentos_visiveis
+                |append:```
+                  {
+                    id: $pagamento.id,
+                    mensalidade_id: $pagamento.mensalidade_id,
+                    aluno_nome: $pagamento.aluno_nome,
+                    competencia: $pagamento.competencia,
+                    valor: $pagamento.valor,
+                    forma_pagamento: $pagamento.forma_pagamento,
+                    data_pagamento: $pagamento.data_pagamento,
+                    registrado_por: $pagamento.registrado_por,
+                    situacao: $pagamento.situacao,
+                    tipo_correcao: $pagamento.tipo_correcao,
+                    motivo_correcao: $pagamento.motivo_correcao,
+                    corrigido_em: $pagamento.corrigido_em,
+                    corrigido_por: $pagamento.corrigido_por
+                  }
+                  ```
+            }
+          }
+          else {
+            var.update $pagamentos_visiveis {
+              value = $pagamentos_visiveis
+                |append:```
+                  {
+                    id: $pagamento.id,
+                    mensalidade_id: $pagamento.mensalidade_id,
+                    aluno_nome: $pagamento.aluno_nome,
+                    competencia: $pagamento.competencia,
+                    valor: $pagamento.valor,
+                    forma_pagamento: $pagamento.forma_pagamento,
+                    data_pagamento: $pagamento.data_pagamento,
+                    situacao: $pagamento.situacao
+                  }
+                  ```
+            }
+          }
         }
+      }
     }
   }
 

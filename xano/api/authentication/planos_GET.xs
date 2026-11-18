@@ -1,4 +1,4 @@
-// Lista planos ativos e descontinuados para administradores.
+// Lista todos os planos para administradores e os ativos para a recepção.
 query planos verb=GET {
   api_group = "Authentication"
   auth = "user"
@@ -7,8 +7,8 @@ query planos verb=GET {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
-      input = {user_id: $auth.id, required_role: "admin"}
+    function.run "Quick Start/enforce_profile_access" {
+      input = {user_id: $auth.id, allow_receptionist: true}
     } as $role_check
   
     db.query plano {
@@ -17,7 +17,30 @@ query planos verb=GET {
     } as $planos
   
     var $planos_visiveis {
-      value = $planos|map:{id:$$.id,nome:$$.nome,descricao:$$.descricao,duracao_meses:$$.duracao_meses,valor:$$.valor,situacao:$$.situacao,created_at:$$.created_at}
+      value = []
+    }
+
+    foreach ($planos) {
+      each as $plano {
+        conditional {
+          if ($role_check == "admin" || $plano.situacao == "Ativo") {
+            var.update $planos_visiveis {
+              value = $planos_visiveis
+                |append:```
+                  {
+                    id: $plano.id,
+                    nome: $plano.nome,
+                    descricao: $plano.descricao,
+                    duracao_meses: $plano.duracao_meses,
+                    valor: $plano.valor,
+                    situacao: $plano.situacao,
+                    created_at: $plano.created_at
+                  }
+                  ```
+            }
+          }
+        }
+      }
     }
   }
 

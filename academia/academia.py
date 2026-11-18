@@ -1,5 +1,6 @@
 import reflex as rx
 
+from academia.ativacao_funcionario import employee_invitation_activation_page
 from academia.access_control import (
     AdminAccessState,
     begin_admin_check,
@@ -169,6 +170,104 @@ def nav_link(label: str, icon: str, href: str, active: bool = False) -> rx.Compo
 
 
 def sidebar(active_page: str) -> rx.Component:
+    admin_view = (
+        AdminAccessState.is_admin
+        & (AdminAccessState.authorized_route == active_page)
+    )
+    admin_links = rx.vstack(
+        nav_link(
+            "Visão geral",
+            "layout-dashboard",
+            "/",
+            active_page == "dashboard",
+        ),
+        nav_link("Alunos", "users-round", "/alunos", active_page == "alunos"),
+        nav_link("Planos", "credit-card", "/planos", active_page == "planos"),
+        nav_link(
+            "Matrículas",
+            "clipboard-list",
+            "/matriculas",
+            active_page == "matriculas",
+        ),
+        nav_link(
+            "Financeiro",
+            "wallet",
+            "/financeiro",
+            active_page == "financeiro",
+        ),
+        nav_link(
+            "Check-ins",
+            "scan-line",
+            "/checkins",
+            active_page == "checkins",
+        ),
+        nav_link(
+            "Funcionários",
+            "users-round",
+            "/funcionarios",
+            active_page == "funcionarios",
+        ),
+        nav_link(
+            "Modalidades",
+            "dumbbell",
+            "/modalidades",
+            active_page == "modalidades",
+        ),
+        nav_link(
+            "Agenda de aulas",
+            "calendar-days",
+            "/sessoes",
+            active_page == "sessoes",
+        ),
+        nav_link(
+            "Reservas",
+            "ticket-check",
+            "/reservas",
+            active_page == "reservas",
+        ),
+        nav_link(
+            "Relatórios",
+            "chart-no-axes-column-increasing",
+            "/relatorios",
+            active_page == "relatorios",
+        ),
+        spacing="2",
+        width="100%",
+    )
+    receptionist_links = rx.vstack(
+        nav_link("Alunos", "users-round", "/alunos", active_page == "alunos"),
+        nav_link(
+            "Matrículas",
+            "clipboard-list",
+            "/matriculas",
+            active_page == "matriculas",
+        ),
+        nav_link(
+            "Financeiro",
+            "wallet",
+            "/financeiro",
+            active_page == "financeiro",
+        ),
+        nav_link(
+            "Check-ins",
+            "scan-line",
+            "/checkins",
+            active_page == "checkins",
+        ),
+        spacing="2",
+        width="100%",
+    )
+    instructor_links = rx.vstack(
+        nav_link("Alunos", "users-round", "/alunos", active_page == "alunos"),
+        nav_link(
+            "Check-ins",
+            "scan-line",
+            "/checkins",
+            active_page == "checkins",
+        ),
+        spacing="2",
+        width="100%",
+    )
     return rx.vstack(
         rx.hstack(
             rx.box(
@@ -196,72 +295,41 @@ def sidebar(active_page: str) -> rx.Component:
             margin_top="8",
         ),
         rx.cond(
-            AdminAccessState.is_admin
-            & (AdminAccessState.authorized_route == active_page),
-            rx.vstack(
-                nav_link(
-                    "Visão geral",
-                    "layout-dashboard",
-                    "/",
-                    active_page == "dashboard",
+            admin_view,
+            admin_links,
+            rx.cond(
+                AdminAccessState.is_receptionist
+                & (AdminAccessState.authorized_route == active_page),
+                receptionist_links,
+                rx.cond(
+                    AdminAccessState.is_instructor
+                    & (AdminAccessState.authorized_route == active_page),
+                    instructor_links,
+                    rx.box(
+                        "Acesso restrito",
+                        color="var(--gray-9)",
+                        width="100%",
+                    ),
                 ),
-                nav_link("Alunos", "users-round", "/alunos", active_page == "alunos"),
-                nav_link("Planos", "credit-card", "/planos", active_page == "planos"),
-                nav_link(
-                    "Matrículas",
-                    "clipboard-list",
-                    "/matriculas",
-                    active_page == "matriculas",
-                ),
-                nav_link(
-                    "Financeiro",
-                    "wallet",
-                    "/financeiro",
-                    active_page == "financeiro",
-                ),
-                nav_link(
-                    "Check-ins",
-                    "scan-line",
-                    "/checkins",
-                    active_page == "checkins",
-                ),
-                nav_link(
-                    "Funcionários",
-                    "users-round",
-                    "/funcionarios",
-                    active_page == "funcionarios",
-                ),
-                nav_link(
-                    "Modalidades",
-                    "dumbbell",
-                    "/modalidades",
-                    active_page == "modalidades",
-                ),
-                nav_link(
-                    "Agenda de aulas",
-                    "calendar-days",
-                    "/sessoes",
-                    active_page == "sessoes",
-                ),
-                nav_link(
-                    "Reservas",
-                    "ticket-check",
-                    "/reservas",
-                    active_page == "reservas",
-                ),
-                nav_link(
-                    "Relatórios",
-                    "chart-no-axes-column-increasing",
-                    "/relatorios",
-                    active_page == "relatorios",
-                ),
-                spacing="2",
-                width="100%",
             ),
         ),
         rx.spacer(),
         rx.callout(
-            "Área administrativa",
+            rx.cond(
+                admin_view,
+                "Área administrativa",
+                rx.cond(
+                    AdminAccessState.is_receptionist
+                    & (AdminAccessState.authorized_route == active_page),
+                    "Área de recepção",
+                    rx.cond(
+                        AdminAccessState.is_instructor
+                        & (AdminAccessState.authorized_route == active_page),
+                        "Área de instrutor",
+                        "Área restrita",
+                    ),
+                ),
+            ),
             icon="shield-check",
             color_scheme="blue",
             size="1",
@@ -511,9 +579,10 @@ def dashboard_page() -> rx.Component:
 def alunos_page() -> rx.Component:
     return app_shell(
         "alunos",
-        "Gestão de alunos",
-        "Cadastre, consulte e mantenha os registros da academia.",
+        "Alunos",
+        "Consulte ou gerencie os registros permitidos para o seu perfil.",
         student_management_content(),
+        access_scope="operations",
     )
 
 
@@ -522,6 +591,7 @@ def app_shell(
     title: str,
     subtitle: str,
     content: rx.Component,
+    access_scope: str = "admin",
 ) -> rx.Component:
     load_event = {
         "dashboard": DashboardState.load_alunos,
@@ -549,9 +619,19 @@ def app_shell(
         "reservas": OperacaoState.is_loading,
         "relatorios": OperacaoState.is_loading,
     }[active_page]
+    is_authorized = AdminAccessState.authorized_route == active_page
     is_verifying_access = AdminAccessState.is_verifying | (
         (AdminAccessState.authorized_route != active_page)
         & (AdminAccessState.error_message == "")
+    )
+    access_label = {
+        "admin": "PAINEL ADMINISTRATIVO",
+        "operations": "OPERAÇÃO DA ACADEMIA",
+    }.get(access_scope, "PAINEL ADMINISTRATIVO")
+    access_message = (
+        "Acesso restrito a funcionários autorizados."
+        if access_scope == "operations"
+        else "Acesso restrito a administradores."
     )
     return rx.flex(
         sidebar(active_page),
@@ -559,7 +639,7 @@ def app_shell(
             rx.hstack(
                 rx.vstack(
                     rx.text(
-                        "PAINEL ADMINISTRATIVO",
+                        access_label,
                         size="1",
                         weight="bold",
                         color="var(--gray-9)",
@@ -587,8 +667,7 @@ def app_shell(
                 margin_bottom="6",
             ),
             rx.cond(
-                AdminAccessState.is_admin
-                & (AdminAccessState.authorized_route == active_page),
+                is_authorized,
                 content,
                 rx.center(
                     rx.vstack(
@@ -600,11 +679,11 @@ def app_shell(
                         rx.text(
                             rx.cond(
                                 is_verifying_access,
-                                "Verificando acesso administrativo...",
+                                "Verificando acesso...",
                                 rx.cond(
                                     AdminAccessState.error_message != "",
                                     AdminAccessState.error_message,
-                                    "Acesso restrito a administradores.",
+                                    access_message,
                                 ),
                             ),
                             color="var(--gray-9)",
@@ -644,3 +723,8 @@ app.add_page(sessoes_page, route="/sessoes")
 app.add_page(reservas_page, route="/reservas")
 app.add_page(relatorios_page, route="/relatorios")
 app.add_page(login_page, route="/login")
+app.add_page(
+    employee_invitation_activation_page,
+    route="/ativar-funcionario",
+    title="Ativar conta de funcionário",
+)

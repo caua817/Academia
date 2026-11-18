@@ -1,6 +1,10 @@
 import reflex as rx
 
-from academia.access_control import begin_admin_check, require_admin
+from academia.access_control import (
+    AdminAccessState,
+    begin_admin_check,
+    require_route_access,
+)
 from academia.login import LoginState
 from academia.planos import format_currency
 from academia.services.xano_client import XanoAPIError, XanoClient
@@ -34,6 +38,11 @@ class FinanceiroState(rx.State):
             return "Sua sessão expirou. Faça login novamente."
         if error.status_code == 403:
             return "Você não tem permissão para acessar a gestão financeira."
+        if error.status_code == 429:
+            return (
+                "O limite temporário de solicitações foi atingido. "
+                "Aguarde um momento antes de tentar novamente."
+            )
         if error.status_code in (400, 409):
             return str(error)
         if error.status_code is not None:
@@ -67,8 +76,9 @@ class FinanceiroState(rx.State):
             mensalidades = XanoClient.get_mensalidades(token)
             pagamentos = XanoClient.get_pagamentos(token)
         except XanoAPIError as error:
-            self.mensalidades = []
-            self.pagamentos = []
+            if error.status_code != 429:
+                self.mensalidades = []
+                self.pagamentos = []
             self.error_message = self._api_error_message(error, action)
             return error.status_code == 401
 
@@ -91,13 +101,17 @@ class FinanceiroState(rx.State):
 
     @rx.event
     async def load_financeiro(self):
-        await begin_admin_check(self)
+        if self.is_loading or self.is_saving or self.is_correcting:
+            return
+
         self.is_loading = True
         self.error_message = ""
+        await begin_admin_check(self)
         yield
 
-        token, should_redirect = await require_admin(self, "financeiro")
+        token, should_redirect = await require_route_access(self, "financeiro")
         if not token:
+            self._clear_sensitive_data()
             self.is_loading = False
             if should_redirect:
                 yield rx.redirect("/login")
@@ -136,6 +150,9 @@ class FinanceiroState(rx.State):
 
     @rx.event
     async def registrar_pagamento(self, mensalidade_id: int):
+        if self.is_loading or self.is_saving or self.is_correcting:
+            return
+
         self.error_message = ""
         self.success_message = ""
         self.form_error = ""
@@ -185,12 +202,12 @@ class FinanceiroState(rx.State):
                 yield rx.redirect("/login")
             return
 
-        self.is_saving = False
         self.success_message = "Pagamento registrado com sucesso."
         expired = self._reload(
             login_state.auth_token,
             "atualizar o histórico financeiro",
         )
+        self.is_saving = False
         if expired:
             from academia.session_state import clear_app_session
 
@@ -208,6 +225,9 @@ class FinanceiroState(rx.State):
 
     @rx.event
     async def corrigir_pagamento(self):
+        if self.is_loading or self.is_saving or self.is_correcting:
+            return
+
         if not self.motivo_correcao.strip():
             self.form_error = "Informe o motivo da correção."
             return
@@ -249,7 +269,6 @@ class FinanceiroState(rx.State):
                 yield rx.redirect("/login")
             return
 
-        self.is_correcting = False
         self.is_correction_open = False
         self.pagamento_id = 0
         self.motivo_correcao = ""
@@ -258,6 +277,7 @@ class FinanceiroState(rx.State):
             login_state.auth_token,
             "atualizar o histórico financeiro",
         )
+        self.is_correcting = False
         if expired:
             from academia.session_state import clear_app_session
 
@@ -305,9 +325,18 @@ class CheckinsState(rx.State):
             )
         return f"Não foi possível {action}. Verifique a conexão e tente novamente."
 
-    def _reload(self, token: str, action: str) -> bool:
+    def _reload(
+        self,
+        token: str,
+        action: str,
+        include_registration_options: bool = True,
+    ) -> bool:
         try:
-            alunos = XanoClient.get_checkin_alunos(token)
+            alunos = (
+                XanoClient.get_checkin_alunos(token)
+                if include_registration_options
+                else []
+            )
             checkins = XanoClient.get_checkins(token)
         except XanoAPIError as error:
             self.alunos_ativos = []
@@ -330,16 +359,19 @@ class CheckinsState(rx.State):
         self.error_message = ""
         yield
 
-        token, should_redirect = await require_admin(self, "checkins")
+        token, should_redirect = await require_route_access(self, "checkins")
         if not token:
+            self._clear_sensitive_data()
             self.is_loading = False
             if should_redirect:
                 yield rx.redirect("/login")
             return
 
+        access_state = await self.get_state(AdminAccessState)
         expired = self._reload(
             token,
             "carregar os check-ins",
+            include_registration_options=not access_state.is_instructor,
         )
         self.is_loading = False
         if expired:
@@ -356,6 +388,13 @@ class CheckinsState(rx.State):
     async def registrar_checkin(self):
         self.error_message = ""
         self.success_message = ""
+        access_state = await self.get_state(AdminAccessState)
+        if access_state.is_instructor:
+            self.error_message = (
+                "Instrutores podem consultar a frequência, mas não registrar "
+                "check-ins."
+            )
+            return
         try:
             aluno_id = int(self.aluno_id)
         except ValueError:
@@ -479,32 +518,36 @@ def pagamento_row(pagamento: dict) -> rx.Component:
         ),
         rx.table.cell(
             rx.cond(
-                status == "Registrado",
-                rx.hstack(
-                    rx.button(
-                        "Cancelar",
-                        on_click=FinanceiroState.abrir_correcao(
-                            pagamento.get("id", 0),
-                            "Cancelado",
+                AdminAccessState.is_admin,
+                rx.cond(
+                    status == "Registrado",
+                    rx.hstack(
+                        rx.button(
+                            "Cancelar",
+                            on_click=FinanceiroState.abrir_correcao(
+                                pagamento.get("id", 0),
+                                "Cancelado",
+                            ),
+                            variant="soft",
+                            color_scheme="gray",
+                            size="1",
+                            disabled=FinanceiroState.is_correcting,
                         ),
-                        variant="soft",
-                        color_scheme="gray",
-                        size="1",
-                        disabled=FinanceiroState.is_correcting,
-                    ),
-                    rx.button(
-                        "Estornar",
-                        on_click=FinanceiroState.abrir_correcao(
-                            pagamento.get("id", 0),
-                            "Estornado",
+                        rx.button(
+                            "Estornar",
+                            on_click=FinanceiroState.abrir_correcao(
+                                pagamento.get("id", 0),
+                                "Estornado",
+                            ),
+                            variant="soft",
+                            color_scheme="red",
+                            size="1",
+                            disabled=FinanceiroState.is_correcting,
                         ),
-                        variant="soft",
-                        color_scheme="red",
-                        size="1",
-                        disabled=FinanceiroState.is_correcting,
+                        spacing="2",
+                        flex_wrap="wrap",
                     ),
-                    spacing="2",
-                    flex_wrap="wrap",
+                    rx.text("—", color="var(--gray-9)"),
                 ),
                 rx.text("—", color="var(--gray-9)"),
             )
@@ -708,7 +751,13 @@ def financeiro_content() -> rx.Component:
                                             rx.table.column_header_cell("VALOR"),
                                             rx.table.column_header_cell("FORMA"),
                                             rx.table.column_header_cell("SITUAÇÃO / MOTIVO"),
-                                            rx.table.column_header_cell("CORREÇÃO"),
+                                            rx.table.column_header_cell(
+                                                rx.cond(
+                                                    AdminAccessState.is_admin,
+                                                    "CORREÇÃO",
+                                                    "AÇÕES",
+                                                )
+                                            ),
                                         )
                                     ),
                                     rx.table.body(
@@ -755,7 +804,11 @@ def financeiro_content() -> rx.Component:
                 variant="soft",
             ),
         ),
-        correction_dialog(),
+        rx.cond(
+            AdminAccessState.is_admin,
+            correction_dialog(),
+            rx.fragment(),
+        ),
         width="100%",
         spacing="5",
         align="stretch",
@@ -770,11 +823,18 @@ def checkin_option(aluno: dict) -> rx.Component:
 
 
 def checkin_row(checkin: dict) -> rx.Component:
-    return rx.table.row(
-        rx.table.cell(checkin.get("aluno_nome", "Aluno")),
-        rx.table.cell(checkin.get("data_hora", "")),
-        rx.table.cell(checkin.get("usuario_nome", "Administrador")),
-        rx.table.cell(checkin.get("matricula_id", "")),
+    return rx.cond(
+        AdminAccessState.is_instructor,
+        rx.table.row(
+            rx.table.cell(checkin.get("aluno_nome", "Aluno")),
+            rx.table.cell(checkin.get("data_hora", "")),
+        ),
+        rx.table.row(
+            rx.table.cell(checkin.get("aluno_nome", "Aluno")),
+            rx.table.cell(checkin.get("data_hora", "")),
+            rx.table.cell(checkin.get("usuario_nome", "Funcionário")),
+            rx.table.cell(checkin.get("matricula_id", "")),
+        ),
     )
 
 
@@ -800,63 +860,70 @@ def checkins_content() -> rx.Component:
                 width="100%",
             ),
         ),
-        rx.card(
-            rx.vstack(
-                rx.heading("Registrar check-in", size="4", color="white"),
-                rx.text(
-                    "A elegibilidade do aluno e da matrícula é validada pelo backend. Mensalidades atrasadas não impedem a entrada.",
-                    size="2",
-                    color="var(--gray-9)",
-                ),
-                rx.hstack(
-                    rx.select.root(
-                        rx.select.trigger(
-                            placeholder="Selecione um aluno ativo",
-                            width="100%",
-                        ),
-                        rx.select.content(
-                            rx.select.group(
-                                rx.foreach(CheckinsState.alunos_ativos, checkin_option)
-                            )
-                        ),
-                        value=CheckinsState.aluno_id,
-                        on_change=CheckinsState.set_aluno_id,
-                        disabled=(
-                            CheckinsState.is_saving
-                            | (CheckinsState.alunos_ativos.length() == 0)
-                        ),
-                    ),
-                    rx.button(
-                        rx.icon("scan-line", size=16),
-                        "Registrar entrada",
-                        on_click=CheckinsState.registrar_checkin,
-                        loading=CheckinsState.is_saving,
-                        disabled=(
-                            CheckinsState.is_saving
-                            | (CheckinsState.aluno_id == "")
-                        ),
-                        color_scheme="blue",
-                    ),
-                    width="100%",
-                    flex_wrap="wrap",
-                    spacing="3",
-                ),
-                rx.cond(
-                    CheckinsState.alunos_ativos.length() == 0,
+        rx.cond(
+            AdminAccessState.is_instructor,
+            rx.fragment(),
+            rx.card(
+                rx.vstack(
+                    rx.heading("Registrar check-in", size="4", color="white"),
                     rx.text(
-                        "Não há alunos ativos disponíveis.",
+                        "A elegibilidade do aluno e da matrícula é validada pelo backend. Mensalidades atrasadas não impedem a entrada.",
                         size="2",
                         color="var(--gray-9)",
                     ),
+                    rx.hstack(
+                        rx.select.root(
+                            rx.select.trigger(
+                                placeholder="Selecione um aluno ativo",
+                                width="100%",
+                            ),
+                            rx.select.content(
+                                rx.select.group(
+                                    rx.foreach(
+                                        CheckinsState.alunos_ativos,
+                                        checkin_option,
+                                    )
+                                )
+                            ),
+                            value=CheckinsState.aluno_id,
+                            on_change=CheckinsState.set_aluno_id,
+                            disabled=(
+                                CheckinsState.is_saving
+                                | (CheckinsState.alunos_ativos.length() == 0)
+                            ),
+                        ),
+                        rx.button(
+                            rx.icon("scan-line", size=16),
+                            "Registrar entrada",
+                            on_click=CheckinsState.registrar_checkin,
+                            loading=CheckinsState.is_saving,
+                            disabled=(
+                                CheckinsState.is_saving
+                                | (CheckinsState.aluno_id == "")
+                            ),
+                            color_scheme="blue",
+                        ),
+                        width="100%",
+                        flex_wrap="wrap",
+                        spacing="3",
+                    ),
+                    rx.cond(
+                        CheckinsState.alunos_ativos.length() == 0,
+                        rx.text(
+                            "Não há alunos ativos disponíveis.",
+                            size="2",
+                            color="var(--gray-9)",
+                        ),
+                    ),
+                    width="100%",
+                    spacing="4",
+                    align="stretch",
                 ),
+                background="#15171d",
+                border="1px solid rgba(255, 255, 255, 0.08)",
                 width="100%",
-                spacing="4",
-                align="stretch",
+                padding="5",
             ),
-            background="#15171d",
-            border="1px solid rgba(255, 255, 255, 0.08)",
-            width="100%",
-            padding="5",
         ),
         rx.cond(
             CheckinsState.is_loading,
@@ -878,11 +945,24 @@ def checkins_content() -> rx.Component:
                         rx.box(
                             rx.table.root(
                                 rx.table.header(
-                                    rx.table.row(
-                                        rx.table.column_header_cell("ALUNO"),
-                                        rx.table.column_header_cell("DATA E HORA"),
-                                        rx.table.column_header_cell("REGISTRADO POR"),
-                                        rx.table.column_header_cell("MATRÍCULA"),
+                                    rx.cond(
+                                        AdminAccessState.is_instructor,
+                                        rx.table.row(
+                                            rx.table.column_header_cell("ALUNO"),
+                                            rx.table.column_header_cell(
+                                                "DATA E HORA"
+                                            ),
+                                        ),
+                                        rx.table.row(
+                                            rx.table.column_header_cell("ALUNO"),
+                                            rx.table.column_header_cell(
+                                                "DATA E HORA"
+                                            ),
+                                            rx.table.column_header_cell(
+                                                "REGISTRADO POR"
+                                            ),
+                                            rx.table.column_header_cell("MATRÍCULA"),
+                                        ),
                                     )
                                 ),
                                 rx.table.body(
@@ -937,6 +1017,7 @@ def financeiro_page() -> rx.Component:
         "Gestão financeira",
         "Acompanhe mensalidades e mantenha o histórico de pagamentos.",
         financeiro_content(),
+        access_scope="operations",
     )
 
 
@@ -948,4 +1029,5 @@ def checkins_page() -> rx.Component:
         "Check-ins",
         "Registre entradas e consulte o histórico de frequência.",
         checkins_content(),
+        access_scope="operations",
     )

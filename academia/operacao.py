@@ -37,6 +37,28 @@ def active_student_options(alunos: list[dict]) -> list[dict[str, str]]:
     ]
 
 
+def active_instructor_options(funcionarios: list[dict]) -> list[dict[str, str]]:
+    options = []
+    for funcionario in funcionarios:
+        if (
+            str(funcionario.get("role", "")).casefold() != "instrutor"
+            or str(funcionario.get("situacao", "")).casefold() != "ativo"
+        ):
+            continue
+        instructor_id = str(funcionario.get("id", ""))
+        name = str(funcionario.get("name") or "").strip()
+        if not instructor_id.isdecimal() or int(instructor_id) <= 0 or not name:
+            continue
+        options.append({"id": instructor_id, "label": name})
+    return options
+
+
+def combine_session_datetime(data: str, horario: str) -> str:
+    parsed_date = date.fromisoformat(data)
+    parsed_time = datetime.strptime(horario, "%H:%M").time()
+    return datetime.combine(parsed_date, parsed_time).isoformat(timespec="minutes")
+
+
 def to_api_timestamp(value: str) -> str:
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
@@ -51,8 +73,9 @@ def to_api_timestamp(value: str) -> str:
 def validate_sessao_fields(
     modalidade_id: str,
     instrutor_id: str,
-    inicio: str,
-    termino: str,
+    data: str,
+    horario_inicio: str,
+    horario_termino: str,
     capacidade: str,
     now: datetime | None = None,
 ) -> str | None:
@@ -60,8 +83,12 @@ def validate_sessao_fields(
         parsed_modality_id = int(modalidade_id)
         parsed_instructor_id = int(instrutor_id)
         parsed_capacity = int(capacidade)
-        start = datetime.fromisoformat(inicio)
-        end = datetime.fromisoformat(termino)
+        start = datetime.fromisoformat(
+            combine_session_datetime(data, horario_inicio)
+        )
+        end = datetime.fromisoformat(
+            combine_session_datetime(data, horario_termino)
+        )
     except ValueError:
         return "Preencha modalidade, instrutor, horários e capacidade válidos."
     if min(parsed_modality_id, parsed_instructor_id) <= 0:
@@ -109,6 +136,7 @@ class OperacaoState(rx.State):
     report_metrics: list[dict[str, str]] = []
     selected_sessao: dict = {}
     selected_sessao_id: str = ""
+    instrutor_options: list[dict[str, str]] = []
     data_inicio: str = ""
     data_fim: str = ""
     is_loading: bool = False
@@ -126,8 +154,9 @@ class OperacaoState(rx.State):
     sessao_id: int = 0
     sessao_modalidade_id: str = ""
     sessao_instrutor_id: str = ""
-    sessao_inicio: str = ""
-    sessao_termino: str = ""
+    sessao_data: str = ""
+    sessao_hora_inicio: str = ""
+    sessao_hora_termino: str = ""
     sessao_capacidade: str = ""
     sessao_local: str = ""
     sessao_editing: bool = False
@@ -141,6 +170,10 @@ class OperacaoState(rx.State):
     @rx.var
     def has_sessoes(self) -> bool:
         return bool(self.sessoes)
+
+    @rx.var
+    def has_active_instructors(self) -> bool:
+        return bool(self.instrutor_options)
 
     @rx.var
     def has_reservas(self) -> bool:
@@ -180,6 +213,7 @@ class OperacaoState(rx.State):
         self.report_metrics = []
         self.selected_sessao = {}
         self.selected_sessao_id = ""
+        self.instrutor_options = []
         self.is_loading = False
         self.is_saving = False
         self.is_changing_status = False
@@ -201,8 +235,9 @@ class OperacaoState(rx.State):
         self.sessao_id = 0
         self.sessao_modalidade_id = ""
         self.sessao_instrutor_id = ""
-        self.sessao_inicio = ""
-        self.sessao_termino = ""
+        self.sessao_data = ""
+        self.sessao_hora_inicio = ""
+        self.sessao_hora_termino = ""
         self.sessao_capacidade = ""
         self.sessao_local = ""
         self.sessao_editing = False
@@ -444,12 +479,16 @@ class OperacaoState(rx.State):
         self.sessao_instrutor_id = value
 
     @rx.event
-    def set_sessao_inicio(self, value: str):
-        self.sessao_inicio = value
+    def set_sessao_data(self, value: str):
+        self.sessao_data = value
 
     @rx.event
-    def set_sessao_termino(self, value: str):
-        self.sessao_termino = value
+    def set_sessao_hora_inicio(self, value: str):
+        self.sessao_hora_inicio = value
+
+    @rx.event
+    def set_sessao_hora_termino(self, value: str):
+        self.sessao_hora_termino = value
 
     @rx.event
     def set_sessao_capacidade(self, value: str):
@@ -483,10 +522,14 @@ class OperacaoState(rx.State):
             start, end = self._date_filters()
             self.modalidades = XanoClient.get_modalidades(token)
             self._prepare_modality_options()
+            self.instrutor_options = active_instructor_options(
+                XanoClient.get_funcionarios(token)
+            )
             self.sessoes = XanoClient.get_sessoes(token, start, end)
             self._prepare_sessions()
         except XanoAPIError as api_error:
             self.sessoes = []
+            self.instrutor_options = []
             self.error_message = self._api_error_message(
                 api_error,
                 "carregar sessões",
@@ -514,12 +557,12 @@ class OperacaoState(rx.State):
         self.sessao_instrutor_id = str(session.get("instrutor_id") or "")
         start, end = _session_times(session)
         if start is not None:
-            self.sessao_inicio = start.astimezone(SAO_PAULO).strftime(
-                "%Y-%m-%dT%H:%M"
-            )
+            local_start = start.astimezone(SAO_PAULO)
+            self.sessao_data = local_start.strftime("%Y-%m-%d")
+            self.sessao_hora_inicio = local_start.strftime("%H:%M")
         if end is not None:
-            self.sessao_termino = end.astimezone(SAO_PAULO).strftime(
-                "%Y-%m-%dT%H:%M"
+            self.sessao_hora_termino = end.astimezone(SAO_PAULO).strftime(
+                "%H:%M"
             )
         self.sessao_capacidade = str(session.get("capacidade") or "")
         self.sessao_local = str(session.get("local") or "")
@@ -539,8 +582,9 @@ class OperacaoState(rx.State):
         self.form_error = validate_sessao_fields(
             self.sessao_modalidade_id,
             self.sessao_instrutor_id,
-            self.sessao_inicio,
-            self.sessao_termino,
+            self.sessao_data,
+            self.sessao_hora_inicio,
+            self.sessao_hora_termino,
             self.sessao_capacidade,
         ) or ""
         if self.form_error:
@@ -555,8 +599,18 @@ class OperacaoState(rx.State):
         payload = {
             "modalidade_id": int(self.sessao_modalidade_id),
             "instrutor_id": int(self.sessao_instrutor_id),
-            "inicio": to_api_timestamp(self.sessao_inicio),
-            "termino": to_api_timestamp(self.sessao_termino),
+            "inicio": to_api_timestamp(
+                combine_session_datetime(
+                    self.sessao_data,
+                    self.sessao_hora_inicio,
+                )
+            ),
+            "termino": to_api_timestamp(
+                combine_session_datetime(
+                    self.sessao_data,
+                    self.sessao_hora_termino,
+                )
+            ),
             "capacidade": int(self.sessao_capacidade),
             "local": self.sessao_local.strip() or None,
         }
@@ -1193,7 +1247,7 @@ def sessoes_content() -> rx.Component:
                     size="4",
                 ),
                 rx.text(
-                    "Selecione uma modalidade e informe o ID do instrutor. "
+                    "Selecione a modalidade e o instrutor pelo nome. "
                     "O Xano valida situação, agenda e capacidade."
                 ),
                 rx.select.root(
@@ -1211,21 +1265,68 @@ def sessoes_content() -> rx.Component:
                     on_change=OperacaoState.set_sessao_modalidade_id,
                     width="100%",
                 ),
-                rx.input(
-                    placeholder="ID do instrutor",
-                    type="number",
+                rx.select.root(
+                    rx.select.trigger(placeholder="Selecione um instrutor"),
+                    rx.select.content(
+                        rx.foreach(
+                            OperacaoState.instrutor_options,
+                            lambda instructor: rx.select.item(
+                                instructor.get("label", "Instrutor"),
+                                value=instructor.get("id", ""),
+                            ),
+                        )
+                    ),
                     value=OperacaoState.sessao_instrutor_id,
                     on_change=OperacaoState.set_sessao_instrutor_id,
+                    width="100%",
                 ),
-                rx.input(
-                    type="datetime-local",
-                    value=OperacaoState.sessao_inicio,
-                    on_change=OperacaoState.set_sessao_inicio,
+                rx.cond(
+                    OperacaoState.has_active_instructors,
+                    rx.fragment(),
+                    rx.text(
+                        "Nenhum instrutor ativo disponível.",
+                        color="var(--gray-9)",
+                    ),
                 ),
-                rx.input(
-                    type="datetime-local",
-                    value=OperacaoState.sessao_termino,
-                    on_change=OperacaoState.set_sessao_termino,
+                rx.vstack(
+                    rx.text("Data da aula"),
+                    rx.input(
+                        type="date",
+                        value=OperacaoState.sessao_data,
+                        on_change=OperacaoState.set_sessao_data,
+                        width="100%",
+                    ),
+                    align="stretch",
+                    spacing="1",
+                    width="100%",
+                ),
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Horário de início"),
+                        rx.input(
+                            type="time",
+                            value=OperacaoState.sessao_hora_inicio,
+                            on_change=OperacaoState.set_sessao_hora_inicio,
+                            width="100%",
+                        ),
+                        align="stretch",
+                        spacing="1",
+                        width="100%",
+                    ),
+                    rx.vstack(
+                        rx.text("Horário de término"),
+                        rx.input(
+                            type="time",
+                            value=OperacaoState.sessao_hora_termino,
+                            on_change=OperacaoState.set_sessao_hora_termino,
+                            width="100%",
+                        ),
+                        align="stretch",
+                        spacing="1",
+                        width="100%",
+                    ),
+                    flex_wrap="wrap",
+                    width="100%",
                 ),
                 rx.input(
                     placeholder="Capacidade",

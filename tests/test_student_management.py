@@ -26,12 +26,13 @@ class XanoClientTests(unittest.TestCase):
             result = operation()
         return result, requests
 
-    def test_list_requires_token_and_returns_list_without_sensitive_fields(self):
+    def test_list_requires_token_and_only_returns_masked_sensitive_fields(self):
         aluno = {
             "id": 12,
             "nome": "Ana Lima",
             "contato": "11999990000",
             "email": "ana@example.com",
+            "cpf": "***.***.***-10",
             "situacao": "Ativo",
         }
         result, requests = self.invoke(
@@ -46,7 +47,7 @@ class XanoClientTests(unittest.TestCase):
             requests[0].headers["Authorization"],
             "Bearer session-token",
         )
-        self.assertNotIn("cpf", result[0])
+        self.assertEqual(result[0]["cpf"], "***.***.***-10")
         self.assertNotIn("endereco", result[0])
 
     def test_detail_uses_sensitive_data_endpoint_only_on_demand(self):

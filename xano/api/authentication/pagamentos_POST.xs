@@ -10,8 +10,8 @@ query pagamentos verb=POST {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
-      input = {user_id: $auth.id, required_role: "admin"}
+    function.run "Quick Start/enforce_profile_access" {
+      input = {user_id: $auth.id, allow_receptionist: true}
     } as $role_check
 
     precondition ($input.forma_pagamento == "PIX" || $input.forma_pagamento == "Cartão") {

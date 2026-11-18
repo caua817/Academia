@@ -8,6 +8,7 @@ from academia.funcionarios import (
     FuncionariosState,
     employee_form_dialog,
     filter_funcionarios,
+    temporary_password_fields,
     validate_funcionario_fields,
 )
 from academia.services.xano_client import XanoAPIError, XanoClient
@@ -40,6 +41,7 @@ class EmployeeClientTests(unittest.TestCase):
             "role": "instrutor",
             "situacao": "Ativo",
             "status_convite": "Enviado",
+            "temporary_password_expired": True,
         }
         payload = {
             "name": "Ana Lima",
@@ -74,6 +76,41 @@ class EmployeeClientTests(unittest.TestCase):
                 "POST",
                 "/funcionarios/convites",
                 payload,
+            ),
+            (
+                lambda: XanoClient.create_temporary_funcionario(
+                    token,
+                    {
+                        **payload,
+                        "temporary_password": "Temporary1",
+                        "temporary_password_confirmation": "Temporary1",
+                    },
+                ),
+                employee,
+                "POST",
+                "/funcionarios/provisionar",
+                {
+                    **payload,
+                    "temporary_password": "Temporary1",
+                    "temporary_password_confirmation": "Temporary1",
+                },
+            ),
+            (
+                lambda: XanoClient.reissue_temporary_password(
+                    token,
+                    7,
+                    {
+                        "temporary_password": "Temporary1",
+                        "temporary_password_confirmation": "Temporary1",
+                    },
+                ),
+                employee,
+                "PATCH",
+                "/funcionarios/senha-temporaria/7",
+                {
+                    "temporary_password": "Temporary1",
+                    "temporary_password_confirmation": "Temporary1",
+                },
             ),
             (
                 lambda: XanoClient.update_funcionario(token, 7, payload),
@@ -128,6 +165,19 @@ class EmployeeClientTests(unittest.TestCase):
                     "email": "ana@example.com",
                     "role": "instrutor",
                     "password": "not-sent",
+                },
+            )
+
+    def test_temporary_password_payload_requires_exact_string_fields(self):
+        with self.assertRaises(XanoAPIError):
+            XanoClient.create_temporary_funcionario(
+                "session-token",
+                {
+                    "name": "Ana Lima",
+                    "email": "ana@example.com",
+                    "role": "instrutor",
+                    "temporary_password": ["invalid"],
+                    "temporary_password_confirmation": "Temporary1",
                 },
             )
 
@@ -220,6 +270,8 @@ class EmployeeStateHarness:
         self.form_name = ""
         self.form_email = ""
         self.form_role = "recepcionista"
+        self.is_reissuing = False
+        self.credential_mode = "temporary"
         self.is_status_dialog_open = False
         self.funcionario_id_to_change = 0
         self.is_reactivating = False
@@ -255,9 +307,9 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         event = FuncionariosState.__dict__["load_funcionarios"].fn
         return [result async for result in event(state)]
 
-    async def run_event(self, name, state):
+    async def run_event(self, name, state, *args):
         event = FuncionariosState.__dict__[name].fn
-        return [result async for result in event(state)]
+        return [result async for result in event(state, *args)]
 
     async def test_admin_identity_is_checked_before_loading_employees(self):
         employees = [{"id": 3, "name": "Ana", "role": "instrutor"}]
@@ -302,6 +354,32 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         get_employees.assert_not_called()
         self.assertFalse(state.is_admin)
         self.assertEqual(state.funcionarios, [])
+        self.assertIn("permissão", state.error_message)
+
+    async def test_non_admin_cannot_create_or_reissue_temporary_credentials(self):
+        state = EmployeeStateHarness()
+        state.form_name = "Ana Lima"
+        state.form_email = "ana@example.com"
+        state.form_role = "instrutor"
+        with (
+            patch(
+                "academia.funcionarios.XanoClient.create_temporary_funcionario"
+            ) as create,
+            patch(
+                "academia.funcionarios.XanoClient.reissue_temporary_password"
+            ) as reissue,
+        ):
+            await self.run_event(
+                "save_funcionario",
+                state,
+                {
+                    "temporary_password": "Temporary1",
+                    "temporary_password_confirmation": "Temporary1",
+                },
+            )
+
+        create.assert_not_called()
+        reissue.assert_not_called()
         self.assertIn("permissão", state.error_message)
 
     async def test_http_403_identity_denies_area_without_loading_employees(self):
@@ -350,6 +428,7 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         state.form_name = "Ana Lima"
         state.form_email = " ANA@example.com "
         state.form_role = "instrutor"
+        state.credential_mode = "invite"
         state.is_form_open = True
         with (
             patch(
@@ -361,7 +440,7 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
                 return_value=[],
             ),
         ):
-            await self.run_event("save_funcionario", state)
+            await self.run_event("save_funcionario", state, {})
 
         invite.assert_called_once_with(
             "session-token",
@@ -375,7 +454,49 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.success_message, "Convite enviado com sucesso.")
         self.assertFalse(state.is_saving)
 
-    async def test_rejected_invite_keeps_form_open_without_success(self):
+    async def test_temporary_employee_creation_sends_password_only_to_api(self):
+        state = EmployeeStateHarness()
+        state.is_admin = True
+        state.form_name = "Ana Lima"
+        state.form_email = " ANA@example.com "
+        state.form_role = "instrutor"
+        state.is_form_open = True
+        form_data = {
+            "temporary_password": "Temporary1",
+            "temporary_password_confirmation": "Temporary1",
+        }
+        with (
+            patch(
+                "academia.funcionarios.XanoClient.create_temporary_funcionario",
+                return_value={"id": 8},
+            ) as create,
+            patch(
+                "academia.funcionarios.XanoClient.get_funcionarios",
+                return_value=[],
+            ),
+        ):
+            results = await self.run_event(
+                "save_funcionario",
+                state,
+                form_data,
+            )
+
+        create.assert_called_once_with(
+            "session-token",
+            {
+                "name": "Ana Lima",
+                "email": "ana@example.com",
+                "role": "instrutor",
+                "temporary_password": "Temporary1",
+                "temporary_password_confirmation": "Temporary1",
+            },
+        )
+        self.assertFalse(state.is_form_open)
+        self.assertIn("24 horas", state.success_message)
+        self.assertFalse(hasattr(state, "temporary_password"))
+        self.assertTrue(results)
+
+    async def test_temporary_employee_creation_rejects_weak_password_locally(self):
         state = EmployeeStateHarness()
         state.is_admin = True
         state.form_name = "Ana Lima"
@@ -383,10 +504,83 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         state.form_role = "instrutor"
         state.is_form_open = True
         with patch(
+            "academia.funcionarios.XanoClient.create_temporary_funcionario"
+        ) as create:
+            await self.run_event(
+                "save_funcionario",
+                state,
+                {
+                    "temporary_password": "weak",
+                    "temporary_password_confirmation": "weak",
+                },
+            )
+
+        create.assert_not_called()
+        self.assertIn("8 caracteres", state.form_error)
+        self.assertTrue(state.is_form_open)
+
+    async def test_expired_temporary_password_can_be_reissued_by_admin(self):
+        state = EmployeeStateHarness()
+        state.is_admin = True
+        state.funcionarios = [
+            {
+                "id": 7,
+                "name": "Ana Lima",
+                "email": "ana@example.com",
+                "role": "instrutor",
+                "temporary_password_expired": True,
+            }
+        ]
+        FuncionariosState.__dict__["open_temporary_password_reissue"].fn(
+            state,
+            7,
+        )
+        self.assertTrue(state.is_form_open)
+        self.assertTrue(state.is_reissuing)
+
+        with (
+            patch(
+                "academia.funcionarios.XanoClient.reissue_temporary_password",
+                return_value={"id": 7},
+            ) as reissue,
+            patch(
+                "academia.funcionarios.XanoClient.get_funcionarios",
+                return_value=[],
+            ),
+        ):
+            await self.run_event(
+                "save_funcionario",
+                state,
+                {
+                    "temporary_password": "NewTemporary1",
+                    "temporary_password_confirmation": "NewTemporary1",
+                },
+            )
+
+        reissue.assert_called_once_with(
+            "session-token",
+            7,
+            {
+                "temporary_password": "NewTemporary1",
+                "temporary_password_confirmation": "NewTemporary1",
+            },
+        )
+        self.assertFalse(state.is_form_open)
+        self.assertIn("24 horas", state.success_message)
+
+    async def test_rejected_invite_keeps_form_open_without_success(self):
+        state = EmployeeStateHarness()
+        state.is_admin = True
+        state.form_name = "Ana Lima"
+        state.form_email = "ana@example.com"
+        state.form_role = "instrutor"
+        state.credential_mode = "invite"
+        state.is_form_open = True
+        with patch(
             "academia.funcionarios.XanoClient.invite_funcionario",
             side_effect=XanoAPIError("E-mail já utilizado.", 409),
         ):
-            await self.run_event("save_funcionario", state)
+            await self.run_event("save_funcionario", state, {})
 
         self.assertTrue(state.is_form_open)
         self.assertIn("E-mail já utilizado", state.form_error)
@@ -405,7 +599,7 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
             "academia.funcionarios.XanoClient.update_funcionario",
             side_effect=XanoAPIError("Alteração rejeitada.", 400),
         ):
-            await self.run_event("save_funcionario", state)
+            await self.run_event("save_funcionario", state, {})
 
         self.assertTrue(state.is_form_open)
         self.assertIn("Alteração rejeitada", state.form_error)
@@ -562,26 +756,13 @@ class EmployeeStateTests(unittest.IsolatedAsyncioTestCase):
         )
 
     def test_employee_form_has_no_password_or_token_inputs(self):
-        rendered = employee_form_dialog().render()
-        input_props = []
-
-        def collect_inputs(node):
-            if isinstance(node, dict):
-                if node.get("name") == "DebounceInput":
-                    props = node.get("props")
-                    if isinstance(props, list):
-                        input_props.extend(props)
-                for value in node.values():
-                    collect_inputs(value)
-            elif isinstance(node, list):
-                for value in node:
-                    collect_inputs(value)
-
-        collect_inputs(rendered)
-        serialized_props = " ".join(input_props).casefold()
-        self.assertIn('type:"email"', serialized_props)
-        self.assertNotIn('type:"password"', serialized_props)
+        serialized_props = str(temporary_password_fields()).casefold()
+        self.assertIn('type:"password"', serialized_props)
+        self.assertIn('name:"temporary_password"', serialized_props)
+        self.assertIn('name:"temporary_password_confirmation"', serialized_props)
+        self.assertNotIn("value:", serialized_props)
         self.assertNotIn("token", serialized_props)
+        self.assertFalse(hasattr(FuncionariosState, "temporary_password"))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 query "alunos/detalhes/{aluno_id}" verb=GET {
   api_group = "Authentication"
   auth = "user"
-  description = "Consulta dados de um aluno para usuários administradores."
+  description = "Consulta dados de um aluno para administradores e recepcionistas."
 
   input {
     int aluno_id {
@@ -10,10 +10,10 @@ query "alunos/detalhes/{aluno_id}" verb=GET {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
+    function.run "Quick Start/enforce_profile_access" {
       input = {
         user_id: $auth.id
-        required_role: "admin"
+        allow_receptionist: true
       }
     } as $role_check
 

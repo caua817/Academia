@@ -1,6 +1,10 @@
 import reflex as rx
 
-from academia.access_control import begin_admin_check, require_admin
+from academia.access_control import (
+    AdminAccessState,
+    begin_admin_check,
+    require_route_access,
+)
 from academia.login import LoginState
 from academia.services.xano_client import XanoAPIError, XanoClient
 
@@ -110,10 +114,9 @@ class AlunosState(rx.State):
         self.error_message = ""
         yield
 
-        token, should_redirect = await require_admin(self, "alunos")
+        token, should_redirect = await require_route_access(self, "alunos")
         if not token:
-            self.alunos = []
-            self.is_loading = False
+            self._clear_sensitive_data()
             if should_redirect:
                 yield rx.redirect("/login")
             return
@@ -337,45 +340,70 @@ def aluno_management_row(aluno: dict) -> rx.Component:
         aluno.get("contato"),
         rx.cond(aluno.get("email"), aluno.get("email"), "Sem contato"),
     )
-    return rx.table.row(
-        rx.table.cell(
-            rx.vstack(
-                rx.text(aluno.get("nome", "Nome não informado"), weight="medium"),
-                rx.text(contact, size="1", color="var(--gray-9)"),
-                spacing="1",
-                align="start",
-            )
-        ),
-        rx.table.cell(
-            rx.badge(
-                status,
-                color_scheme=rx.cond(
-                    (status == "Ativo") | (status == "ativo"),
-                    "green",
-                    "gray",
-                ),
-                variant="soft",
-            )
-        ),
-        rx.table.cell(
-            rx.hstack(
-                rx.button(
-                    rx.icon("pencil", size=15),
-                    "Editar",
+    return rx.cond(
+        AdminAccessState.is_instructor,
+        rx.table.row(
+            rx.table.cell(
+                rx.text(aluno.get("nome", "Nome não informado"), weight="medium")
+            ),
+            rx.table.cell(
+                rx.badge(
+                    status,
+                    color_scheme=rx.cond(
+                        (status == "Ativo") | (status == "ativo"),
+                        "green",
+                        "gray",
+                    ),
                     variant="soft",
-                    on_click=AlunosState.edit_aluno(aluno.get("id", 0)),
-                    disabled=AlunosState.is_loading_details,
-                ),
-                rx.button(
-                    rx.icon("user-round-x", size=15),
-                    "Desativar",
+                )
+            ),
+        ),
+        rx.table.row(
+            rx.table.cell(
+                rx.vstack(
+                    rx.text(
+                        aluno.get("nome", "Nome não informado"),
+                        weight="medium",
+                    ),
+                    rx.text(contact, size="1", color="var(--gray-9)"),
+                    spacing="1",
+                    align="start",
+                )
+            ),
+            rx.table.cell(rx.cond(aluno.get("cpf"), aluno.get("cpf"), "—")),
+            rx.table.cell(
+                rx.badge(
+                    status,
+                    color_scheme=rx.cond(
+                        (status == "Ativo") | (status == "ativo"),
+                        "green",
+                        "gray",
+                    ),
                     variant="soft",
-                    color_scheme="red",
-                    on_click=AlunosState.request_deactivation(aluno.get("id", 0)),
-                    disabled=AlunosState.is_deactivating,
-                ),
-                spacing="2",
-            )
+                )
+            ),
+            rx.table.cell(
+                rx.hstack(
+                    rx.button(
+                        rx.icon("pencil", size=15),
+                        "Editar",
+                        variant="soft",
+                        on_click=AlunosState.edit_aluno(aluno.get("id", 0)),
+                        disabled=AlunosState.is_loading_details,
+                    ),
+                    rx.button(
+                        rx.icon("user-round-x", size=15),
+                        "Desativar",
+                        variant="soft",
+                        color_scheme="red",
+                        on_click=AlunosState.request_deactivation(
+                            aluno.get("id", 0)
+                        ),
+                        disabled=AlunosState.is_deactivating,
+                    ),
+                    spacing="2",
+                )
+            ),
         ),
     )
 
@@ -562,18 +590,26 @@ def student_management_content() -> rx.Component:
         rx.hstack(
             rx.input(
                 rx.input.slot(rx.icon("search", size=16)),
-                placeholder="Buscar por nome ou contato",
+                placeholder=rx.cond(
+                    AdminAccessState.is_instructor,
+                    "Buscar por nome",
+                    "Buscar por nome ou contato",
+                ),
                 value=AlunosState.search_query,
                 on_change=AlunosState.set_search_query,
                 width=["100%", "360px"],
                 size="3",
             ),
             rx.spacer(),
-            rx.button(
-                rx.icon("plus", size=17),
-                "Novo aluno",
-                color_scheme="blue",
-                on_click=AlunosState.open_new_aluno,
+            rx.cond(
+                AdminAccessState.is_instructor,
+                rx.box(),
+                rx.button(
+                    rx.icon("plus", size=17),
+                    "Novo aluno",
+                    color_scheme="blue",
+                    on_click=AlunosState.open_new_aluno,
+                ),
             ),
             width="100%",
             flex_wrap="wrap",
@@ -619,8 +655,17 @@ def student_management_content() -> rx.Component:
                             rx.table.header(
                                 rx.table.row(
                                     rx.table.column_header_cell("ALUNO"),
+                                    rx.cond(
+                                        AdminAccessState.is_instructor,
+                                        rx.fragment(),
+                                        rx.table.column_header_cell("CPF"),
+                                    ),
                                     rx.table.column_header_cell("SITUAÇÃO"),
-                                    rx.table.column_header_cell("AÇÕES"),
+                                    rx.cond(
+                                        AdminAccessState.is_instructor,
+                                        rx.fragment(),
+                                        rx.table.column_header_cell("AÇÕES"),
+                                    ),
                                 )
                             ),
                             rx.table.body(
@@ -693,8 +738,14 @@ def student_management_content() -> rx.Component:
                 width="100%",
             ),
         ),
-        aluno_form_dialog(),
-        deactivate_confirmation_dialog(),
+        rx.cond(
+            AdminAccessState.is_instructor,
+            rx.fragment(),
+            rx.vstack(
+                aluno_form_dialog(),
+                deactivate_confirmation_dialog(),
+            ),
+        ),
         width="100%",
         spacing="5",
         align="stretch",

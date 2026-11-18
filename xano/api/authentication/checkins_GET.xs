@@ -1,4 +1,4 @@
-// Lista histórico de check-ins para administradores.
+// Lista o histórico de check-ins com campos mínimos por perfil.
 query checkins verb=GET {
   api_group = "Authentication"
   auth = "user"
@@ -7,8 +7,12 @@ query checkins verb=GET {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
-      input = {user_id: $auth.id, required_role: "admin"}
+    function.run "Quick Start/enforce_profile_access" {
+      input = {
+        user_id: $auth.id
+        allow_receptionist: true
+        allow_instructor: true
+      }
     } as $role_check
 
     db.query checkin {
@@ -32,16 +36,43 @@ query checkins verb=GET {
     } as $checkins
 
     var $checkins_visiveis {
-      value = $checkins
-        |map:{
-          id:$$.id,
-          aluno_id:$$.aluno_id,
-          aluno_nome:$$.aluno_nome,
-          matricula_id:$$.matricula_id,
-          data_hora:$$.data_hora,
-          registrado_por:$$.registrado_por,
-          usuario_nome:$$.usuario_nome
+      value = []
+    }
+
+    foreach ($checkins) {
+      each as $checkin {
+        conditional {
+          if ($role_check == "instrutor") {
+            var.update $checkins_visiveis {
+              value = $checkins_visiveis
+                |append:```
+                  {
+                    id: $checkin.id,
+                    aluno_id: $checkin.aluno_id,
+                    aluno_nome: $checkin.aluno_nome,
+                    data_hora: $checkin.data_hora
+                  }
+                  ```
+            }
+          }
+          else {
+            var.update $checkins_visiveis {
+              value = $checkins_visiveis
+                |append:```
+                  {
+                    id: $checkin.id,
+                    aluno_id: $checkin.aluno_id,
+                    aluno_nome: $checkin.aluno_nome,
+                    matricula_id: $checkin.matricula_id,
+                    data_hora: $checkin.data_hora,
+                    registrado_por: $checkin.registrado_por,
+                    usuario_nome: $checkin.usuario_nome
+                  }
+                  ```
+            }
+          }
         }
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-// Lista matrículas e condições contratadas para administradores.
+// Lista matrículas e condições contratadas para administradores e recepcionistas.
 query matriculas verb=GET {
   api_group = "Authentication"
   auth = "user"
@@ -7,8 +7,8 @@ query matriculas verb=GET {
   }
 
   stack {
-    function.run "Quick Start/enforce_role" {
-      input = {user_id: $auth.id, required_role: "admin"}
+    function.run "Quick Start/enforce_profile_access" {
+      input = {user_id: $auth.id, allow_receptionist: true}
     } as $role_check
   
     var $today_text {
