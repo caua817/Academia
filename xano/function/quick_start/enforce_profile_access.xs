@@ -63,4 +63,5 @@ function "Quick Start/enforce_profile_access" {
     input = {user_id: 2147483647, allow_receptionist: true}
     expect.to_throw
   }
+  guid = "VfzdbqUgWUnr3T1c-4BhHQ_Pgkc"
 }
