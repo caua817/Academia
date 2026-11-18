@@ -1,4 +1,5 @@
 import os
+import time
 from collections.abc import Mapping
 from typing import TypeAlias
 
@@ -24,9 +25,15 @@ QueryParams = Mapping[str, str]
 class XanoAPIError(Exception):
     """Indica falha de comunicação ou resposta inválida da API Xano."""
 
-    def __init__(self, message: str, status_code: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        retryable: bool = False,
+    ):
         super().__init__(message)
         self.status_code = status_code
+        self.retryable = retryable
 
 
 class XanoClient:
@@ -123,9 +130,13 @@ class XanoClient:
             raise XanoAPIError(
                 message,
                 error.response.status_code,
+                retryable=500 <= error.response.status_code < 600,
             ) from error
         except httpx.RequestError as error:
-            raise XanoAPIError("Não foi possível conectar à API.") from error
+            raise XanoAPIError(
+                "Não foi possível conectar à API.",
+                retryable=True,
+            ) from error
         except ValueError as error:
             raise XanoAPIError("A API retornou uma resposta inválida.") from error
 
@@ -217,6 +228,17 @@ class XanoClient:
     def get_current_user(token: str) -> dict:
         data = XanoClient._request("GET", "/auth/me", token)
         return XanoClient._expect_employee_object(data)
+
+    @staticmethod
+    def get_current_user_with_retry(token: str) -> dict:
+        """Repete uma vez apenas falhas transitórias da consulta de perfil."""
+        try:
+            return XanoClient.get_current_user(token)
+        except XanoAPIError as error:
+            if not error.retryable:
+                raise
+        time.sleep(0.25)
+        return XanoClient.get_current_user(token)
 
     @staticmethod
     def get_funcionarios(token: str) -> list[dict]:

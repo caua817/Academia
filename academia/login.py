@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 
 import reflex as rx
@@ -43,7 +44,7 @@ class LoginState(rx.State):
         self.password_visible = not self.password_visible
 
     @rx.event
-    def handle_login(self, form_data: dict[str, Any]):
+    async def handle_login(self, form_data: dict[str, Any]):
         """Valida as credenciais, abre uma sessão e encaminha para a aplicação."""
         if self.is_loading:
             yield rx.set_value(LOGIN_PASSWORD_FIELD_ID, "")
@@ -66,7 +67,8 @@ class LoginState(rx.State):
         yield
 
         try:
-            login_result: LoginResult = AuthenticationClient.login(
+            login_result: LoginResult = await asyncio.to_thread(
+                AuthenticationClient.login,
                 normalized_email,
                 password,
             )
@@ -96,11 +98,21 @@ class LoginState(rx.State):
                 )
                 return
             try:
-                identity = XanoClient.get_current_user(token)
-            except XanoAPIError:
-                self.error_message = (
-                    "Não foi possível verificar seu perfil. Tente novamente."
+                identity = await asyncio.to_thread(
+                    XanoClient.get_current_user_with_retry,
+                    token,
                 )
+            except XanoAPIError as error:
+                if error.status_code == 429:
+                    self.error_message = (
+                        "A API está limitando solicitações. Aguarde um "
+                        "momento e tente novamente."
+                    )
+                else:
+                    self.error_message = (
+                        "Não foi possível verificar seu perfil. Tente "
+                        "novamente."
+                    )
             else:
                 route = LANDING_ROUTE_BY_ROLE.get(identity.get("role"))
                 if route is None:
