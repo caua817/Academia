@@ -423,6 +423,13 @@ class OperationScreenStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("/reservas", app._pages)
         self.assertNotIn("/reservas", str(sidebar("dashboard")))
 
+    def test_bytefit_brand_is_visible_on_login_and_navigation(self):
+        from academia.academia import sidebar
+        from academia.login import login_page
+
+        self.assertIn("ByteFit", str(login_page()))
+        self.assertIn("ByteFit", str(sidebar("dashboard")))
+
     def test_report_metrics_exclude_reservations_and_occupancy(self):
         state = _OperationStateHarness()
         state.relatorio = {

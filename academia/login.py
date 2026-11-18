@@ -361,7 +361,7 @@ def login_page() -> rx.Component:
                         background="rgba(59, 130, 246, 0.12)",
                     ),
                     rx.heading(
-                        "SISTEMA ACADEMIA",
+                        "ByteFit",
                         size="6",
                         weight="bold",
                         color="white",

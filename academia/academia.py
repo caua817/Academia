@@ -270,7 +270,7 @@ def sidebar(active_page: str) -> rx.Component:
                 border_radius="12px",
             ),
             rx.vstack(
-                rx.heading("ACADEMIA", size="3", weight="bold", color="white"),
+                rx.heading("ByteFit", size="3", weight="bold", color="white"),
                 rx.text("GESTÃO FITNESS", size="1", color="var(--gray-9)"),
                 spacing="0",
                 align="start",
