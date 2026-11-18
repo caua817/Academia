@@ -12,9 +12,19 @@ from academia.services.auth_client import LoginResult
 from academia.services.xano_client import XanoAPIError
 
 
+class LoginStateHarness(SimpleNamespace):
+    _clear_verified_profile = LoginState._clear_verified_profile
+    _cache_verified_profile = LoginState._cache_verified_profile
+    _get_verified_profile_role = LoginState._get_verified_profile_role
+
+
 class AccessHarness:
     def __init__(self, token: str = "session-token"):
-        self.login_state = SimpleNamespace(auth_token=token)
+        self.login_state = LoginStateHarness(
+            auth_token=token,
+            _verified_profile_role="",
+            _verified_profile_token_digest="",
+        )
         self.access_state = SimpleNamespace(
             is_admin=False,
             is_receptionist=False,
@@ -51,6 +61,74 @@ class RolePermissionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(redirect)
                 self.assertEqual(state.access_state.authorized_route, route)
                 self.assertTrue(state.access_state.is_admin)
+
+    async def test_verified_profile_is_reused_between_protected_routes(self):
+        state = AccessHarness()
+        with patch(
+            "academia.access_control.XanoClient.get_current_user",
+            return_value={"role": "admin"},
+        ) as get_current_user:
+            first_token, first_redirect = await require_route_access(
+                state,
+                "financeiro",
+            )
+            second_token, second_redirect = await require_route_access(
+                state,
+                "alunos",
+            )
+
+        self.assertEqual(first_token, "session-token")
+        self.assertEqual(second_token, "session-token")
+        self.assertFalse(first_redirect)
+        self.assertFalse(second_redirect)
+        get_current_user.assert_called_once_with("session-token")
+
+    async def test_profile_cache_is_rechecked_when_token_changes(self):
+        state = AccessHarness()
+        with patch(
+            "academia.access_control.XanoClient.get_current_user",
+            side_effect=[
+                {"role": "admin"},
+                {"role": "recepcionista"},
+            ],
+        ) as get_current_user:
+            await require_route_access(state, "financeiro")
+            state.login_state.auth_token = "replacement-token"
+            token, redirect = await require_route_access(
+                state,
+                "financeiro",
+            )
+
+        self.assertEqual(token, "replacement-token")
+        self.assertFalse(redirect)
+        self.assertEqual(get_current_user.call_count, 2)
+        self.assertEqual(
+            state.login_state._get_verified_profile_role(
+                "replacement-token"
+            ),
+            "recepcionista",
+        )
+
+    async def test_token_mismatch_discards_cache_and_fails_closed(self):
+        state = AccessHarness()
+        state.login_state._cache_verified_profile(
+            "previous-token",
+            "admin",
+        )
+        with patch(
+            "academia.access_control.XanoClient.get_current_user",
+            side_effect=XanoAPIError("too many requests", 429),
+        ) as get_current_user:
+            token, redirect = await require_route_access(
+                state,
+                "financeiro",
+            )
+
+        self.assertEqual(token, "")
+        self.assertFalse(redirect)
+        self.assertFalse(state.access_state.authorized_route)
+        self.assertEqual(state.login_state._verified_profile_role, "")
+        get_current_user.assert_called_once_with("session-token")
 
     async def test_receptionist_has_only_operational_access(self):
         allowed = {"alunos", "matriculas", "financeiro", "checkins"}
@@ -181,7 +259,7 @@ class LoginLandingRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(hasattr(LoginState, "password"))
 
     async def test_login_verifies_profile_before_storing_session(self):
-        state = SimpleNamespace(
+        state = LoginStateHarness(
             email=" staff@example.com ",
             password="secret",
             password_visible=True,
@@ -219,7 +297,7 @@ class LoginLandingRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(state.password_visible)
 
     async def test_login_does_not_store_session_when_profile_check_fails(self):
-        state = SimpleNamespace(
+        state = LoginStateHarness(
             email="staff@example.com",
             password="secret",
             password_visible=False,
@@ -251,8 +329,42 @@ class LoginLandingRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state.error_message)
         redirect.assert_not_called()
 
+    async def test_login_rejects_malformed_profile_role(self):
+        state = LoginStateHarness(
+            email="staff@example.com",
+            password="",
+            password_visible=False,
+            auth_token="",
+            error_message="",
+            success_message="",
+            requires_password_change=False,
+            is_loading=False,
+        )
+        event = LoginState.__dict__["handle_login"].fn
+
+        with (
+            patch(
+                "academia.login.AuthenticationClient.login",
+                return_value=LoginResult(token="new-token"),
+            ),
+            patch(
+                "academia.login.XanoClient.get_current_user",
+                return_value={"role": ["admin"]},
+            ),
+            patch("academia.login.rx.redirect") as redirect,
+        ):
+            [
+                result
+                async for result in event(state, {"password": "secret"})
+            ]
+
+        self.assertEqual(state.auth_token, "")
+        self.assertEqual(state._verified_profile_role, "")
+        self.assertTrue(state.error_message)
+        redirect.assert_not_called()
+
     async def test_login_profile_rate_limit_does_not_store_token(self):
-        state = SimpleNamespace(
+        state = LoginStateHarness(
             email="staff@example.com",
             password="",
             password_visible=False,
@@ -285,7 +397,7 @@ class LoginLandingRouteTests(unittest.IsolatedAsyncioTestCase):
         redirect.assert_not_called()
 
     async def test_temporary_login_does_not_issue_or_verify_a_session(self):
-        state = SimpleNamespace(
+        state = LoginStateHarness(
             email=" Staff@Example.com ",
             password="temporary-password",
             password_visible=True,
@@ -325,7 +437,7 @@ class LoginLandingRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state.requires_password_change)
 
     async def test_expired_temporary_login_shows_reissue_message(self):
-        state = SimpleNamespace(
+        state = LoginStateHarness(
             email="staff@example.com",
             password="temporary-password",
             password_visible=False,
@@ -363,7 +475,7 @@ class LoginLandingRouteTests(unittest.IsolatedAsyncioTestCase):
 
 class TemporaryPasswordStateTests(unittest.IsolatedAsyncioTestCase):
     async def test_temporary_password_change_requires_a_new_login(self):
-        state = SimpleNamespace(
+        state = LoginStateHarness(
             requires_password_change=True,
             email="staff@example.com",
             auth_token="",
@@ -399,7 +511,7 @@ class TemporaryPasswordStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(results), 4)
 
     async def test_temporary_password_change_rejects_weak_password(self):
-        state = SimpleNamespace(
+        state = LoginStateHarness(
             requires_password_change=True,
             email="staff@example.com",
             auth_token="",

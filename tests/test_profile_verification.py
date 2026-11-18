@@ -163,9 +163,20 @@ class ProfileVerificationResponsivenessTests(unittest.IsolatedAsyncioTestCase):
         )
         from academia.login import LoginState
 
+        class LoginHarness:
+            auth_token = "session-token"
+            _verified_profile_role = ""
+            _verified_profile_token_digest = ""
+
+            _clear_verified_profile = LoginState._clear_verified_profile
+            _cache_verified_profile = LoginState._cache_verified_profile
+            _get_verified_profile_role = (
+                LoginState._get_verified_profile_role
+            )
+
         class StateHarness:
             def __init__(self):
-                self.login = type("Login", (), {"auth_token": "session-token"})()
+                self.login = LoginHarness()
                 self.access = type(
                     "Access",
                     (),
@@ -213,7 +224,14 @@ class ProfileVerificationResponsivenessTests(unittest.IsolatedAsyncioTestCase):
         from academia.services.auth_client import LoginResult
 
         event_loop_thread = threading.get_ident()
-        state = SimpleNamespace(
+        class LoginHarness(SimpleNamespace):
+            _clear_verified_profile = LoginState._clear_verified_profile
+            _cache_verified_profile = LoginState._cache_verified_profile
+            _get_verified_profile_role = (
+                LoginState._get_verified_profile_role
+            )
+
+        state = LoginHarness(
             email="staff@example.com",
             password_visible=False,
             auth_token="",

@@ -19,6 +19,12 @@ from academia.operacao import (
 from academia.services.xano_client import XanoAPIError
 
 
+class _LoginStateHarness(SimpleNamespace):
+    _clear_verified_profile = LoginState._clear_verified_profile
+    _cache_verified_profile = LoginState._cache_verified_profile
+    _get_verified_profile_role = LoginState._get_verified_profile_role
+
+
 class OperationValidationTests(unittest.TestCase):
     def test_date_range_validation(self):
         self.assertIsNone(validate_date_range("2026-11-01", "2026-11-30"))
@@ -116,7 +122,11 @@ class OperationValidationTests(unittest.TestCase):
 
 class _AccessHarness:
     def __init__(self, token):
-        self.login_state = SimpleNamespace(auth_token=token)
+        self.login_state = _LoginStateHarness(
+            auth_token=token,
+            _verified_profile_role="",
+            _verified_profile_token_digest="",
+        )
         self.access_state = SimpleNamespace(
             is_admin=False,
             is_verifying=False,

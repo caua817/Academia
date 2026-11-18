@@ -14,6 +14,8 @@ from academia.session_state import clear_app_session
 
 
 class StrictState:
+    _clear_verified_profile = LoginState._clear_verified_profile
+
     def __init__(self, fields: set[str], **values):
         object.__setattr__(self, "_fields", fields)
         for field, value in values.items():
@@ -32,6 +34,8 @@ class SessionStateTests(unittest.IsolatedAsyncioTestCase):
             auth_token="session-token",
             email="staff@example.com",
             password_visible=True,
+            _verified_profile_role="admin",
+            _verified_profile_token_digest="digest",
         )
         states = {
             DashboardState: SimpleNamespace(
@@ -77,3 +81,5 @@ class SessionStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(login_state.auth_token, "")
         self.assertEqual(login_state.email, "")
         self.assertFalse(login_state.password_visible)
+        self.assertEqual(login_state._verified_profile_role, "")
+        self.assertEqual(login_state._verified_profile_token_digest, "")

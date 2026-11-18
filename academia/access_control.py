@@ -85,38 +85,49 @@ async def require_roles(
         access_state.error_message = ""
         return "", True
 
-    try:
-        identity = await asyncio.to_thread(
-            XanoClient.get_current_user_with_retry,
-            token,
-        )
-    except XanoAPIError as error:
-        access_state = await state.get_state(AdminAccessState)
-        access_state.is_verifying = False
-        if error.status_code == 401:
-            from academia.session_state import clear_app_session
+    role = login_state._get_verified_profile_role(token)
+    if not role:
+        try:
+            identity = await asyncio.to_thread(
+                XanoClient.get_current_user_with_retry,
+                token,
+            )
+        except XanoAPIError as error:
+            access_state = await state.get_state(AdminAccessState)
+            access_state.is_verifying = False
+            if error.status_code == 401:
+                from academia.session_state import clear_app_session
 
-            await clear_app_session(state)
-            return "", True
-        if error.status_code == 403:
-            access_state.error_message = (
-                "Você não tem permissão para acessar esta área."
-            )
-        elif error.status_code == 429:
-            access_state.error_message = (
-                "A API está limitando solicitações. Aguarde um momento e "
-                "tente novamente."
-            )
-        else:
-            access_state.error_message = (
-                "Não foi possível verificar seu perfil. Tente novamente."
-            )
-        return "", False
+                await clear_app_session(state)
+                return "", True
+            if error.status_code == 403:
+                access_state.error_message = (
+                    "Você não tem permissão para acessar esta área."
+                )
+            elif error.status_code == 429:
+                access_state.error_message = (
+                    "A API está limitando solicitações. Aguarde um momento e "
+                    "tente novamente."
+                )
+            else:
+                access_state.error_message = (
+                    "Não foi possível verificar seu perfil. Tente novamente."
+                )
+            return "", False
+
+        identity_role = identity.get("role")
+        role = (
+            identity_role
+            if isinstance(identity_role, str)
+            and identity_role in ROLE_ROUTE_ACCESS
+            else ""
+        )
+        if role:
+            login_state._cache_verified_profile(token, role)
 
     access_state = await state.get_state(AdminAccessState)
     access_state.is_verifying = False
-    role = identity.get("role")
-    if not isinstance(role, str) or role not in allowed_roles:
+    if role not in allowed_roles:
         access_state.error_message = denial_message
         return "", False
 

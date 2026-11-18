@@ -57,3 +57,4 @@ async def clear_app_session(state: rx.State) -> None:
     login_state.auth_token = ""
     login_state.email = ""
     login_state.password_visible = False
+    login_state._clear_verified_profile()

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from typing import Any
 
 import reflex as rx
@@ -34,6 +35,29 @@ class LoginState(rx.State):
     success_message: str = ""
     requires_password_change: bool = False
     is_loading: bool = False
+    _verified_profile_role: str = ""
+    _verified_profile_token_digest: str = ""
+
+    def _clear_verified_profile(self) -> None:
+        self._verified_profile_role = ""
+        self._verified_profile_token_digest = ""
+
+    def _cache_verified_profile(self, token: str, role: str) -> None:
+        self._verified_profile_role = role
+        self._verified_profile_token_digest = hashlib.sha256(
+            token.encode("utf-8")
+        ).hexdigest()
+
+    def _get_verified_profile_role(self, token: str) -> str:
+        token_digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        if (
+            not token
+            or token_digest
+            != getattr(self, "_verified_profile_token_digest", "")
+        ):
+            self._clear_verified_profile()
+            return ""
+        return getattr(self, "_verified_profile_role", "")
 
     @rx.event
     def set_email_val(self, val: str):
@@ -63,6 +87,7 @@ class LoginState(rx.State):
 
         normalized_email = self.email.strip().lower()
         self.is_loading = True
+        self._clear_verified_profile()
         self.auth_token = ""
         yield
 
@@ -114,7 +139,12 @@ class LoginState(rx.State):
                         "novamente."
                     )
             else:
-                route = LANDING_ROUTE_BY_ROLE.get(identity.get("role"))
+                identity_role = identity.get("role")
+                route = (
+                    LANDING_ROUTE_BY_ROLE.get(identity_role)
+                    if isinstance(identity_role, str)
+                    else None
+                )
                 if route is None:
                     self.error_message = (
                         "Sua conta não possui um perfil autorizado para acessar "
@@ -122,6 +152,10 @@ class LoginState(rx.State):
                     )
                 else:
                     self.auth_token = token
+                    self._cache_verified_profile(
+                        token,
+                        identity_role,
+                    )
                     self.email = normalized_email
                     self.password_visible = False
                     yield rx.redirect(route)
@@ -201,6 +235,7 @@ class LoginState(rx.State):
             else:
                 self.requires_password_change = False
                 self.auth_token = ""
+                self._clear_verified_profile()
                 self.password_visible = False
                 self.success_message = (
                     "Senha alterada. Faça login novamente com sua nova senha."
